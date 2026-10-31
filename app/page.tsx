@@ -76,7 +76,6 @@ export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  // PERBAIKAN: state username sekarang dideklarasikan.
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -200,7 +199,7 @@ export default function Home() {
     };
   }, [profile, load, supabase]);
 
-  // LOGIN: menggunakan identifier agar cocok dengan API login.
+  // LOGIN
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -247,57 +246,199 @@ export default function Home() {
 
   const isAdmin = profile?.role === 'admin';
 
+  // RATA-RATA SPEECH
   const speechAverage = (f: Finalist) => {
-  const total = speech
-    .filter((s) => s.finalist_id === f.id)
-    .reduce((n, s) => n + Number(s.score), 0);
+    const total = speech
+      .filter((s) => s.finalist_id === f.id)
+      .reduce((n, s) => n + Number(s.score), 0);
 
-  // Nilai juri yang belum masuk dihitung 0.
-  return judges.length ? total / judges.length : 0;
-};
+    // Nilai juri yang belum masuk dihitung 0.
+    return judges.length ? total / judges.length : 0;
+  };
 
-// Urutan seluruh finalis berdasarkan rata-rata Speech.
-const rankedSpeech = (g: Gender) =>
-  finalists
-    .filter((f) => f.gender === g)
-    .slice()
-    .sort(
-      (a, b) =>
-        speechAverage(b) - speechAverage(a) ||
-        a.created_at.localeCompare(b.created_at) ||
-        a.name.localeCompare(b.name)
+  // URUTAN SPEECH
+  const rankedSpeech = (g: Gender) =>
+    finalists
+      .filter((f) => f.gender === g)
+      .slice()
+      .sort(
+        (a, b) =>
+          speechAverage(b) - speechAverage(a) ||
+          a.created_at.localeCompare(b.created_at) ||
+          a.name.localeCompare(b.name)
+      );
+
+  // HANYA FINALIS DENGAN NILAI SPEECH LEBIH DARI 0 YANG MEMENUHI SYARAT.
+  const rankedSpeechWithScores = (g: Gender) =>
+    rankedSpeech(g).filter((f) =>
+      speech.some(
+        (s) =>
+          s.finalist_id === f.id &&
+          Number(s.score) > 0
+      )
     );
 
-// Hanya finalis yang sudah memiliki nilai Speech yang bisa lolos.
-// Nilai 0 tetap dianggap sudah dinilai.
-const rankedSpeechWithScores = (g: Gender) =>
-  rankedSpeech(g).filter((f) =>
-    speech.some(
-      (s) =>
-        s.finalist_id === f.id &&
-        Number(s.score) > 0
-    )
-  );
-// Maksimal 6 finalis Putra dan 6 finalis Putri.
-const topSix = (g: Gender) =>
-  rankedSpeechWithScores(g).slice(0, 6);
+  // TOP 6 PUTRA DAN TOP 6 PUTRI.
+  const topSix = (g: Gender) =>
+    rankedSpeechWithScores(g).slice(0, 6);
 
-const qnaTotal = (f: Finalist) =>
-  qna
-    .filter((s) => s.finalist_id === f.id)
-    .reduce((n, s) => n + Number(s.score), 0);
+  // TOTAL NILAI QNA.
+  const qnaTotal = (f: Finalist) =>
+    qna
+      .filter((s) => s.finalist_id === f.id)
+      .reduce((n, s) => n + Number(s.score), 0);
 
-// Peringkat QnA berdasarkan total nilai QnA.
-const rankedQna = (g: Gender) =>
-  topSix(g)
-    .slice()
-    .sort(
-      (a, b) =>
-        qnaTotal(b) - qnaTotal(a) ||
-        a.created_at.localeCompare(b.created_at) ||
-        a.name.localeCompare(b.name)
+  // PERINGKAT QNA BERDASARKAN TOTAL NILAI.
+  const rankedQna = (g: Gender) =>
+    topSix(g)
+      .slice()
+      .sort(
+        (a, b) =>
+          qnaTotal(b) - qnaTotal(a) ||
+          a.created_at.localeCompare(b.created_at) ||
+          a.name.localeCompare(b.name)
+      );
+
+  // NILAI MILIK JURI YANG SEDANG LOGIN.
+  const myScore = (kind: 'speech' | 'qna', id: string) => {
+    const list = kind === 'speech' ? speech : qna;
+
+    const row = list.find(
+      (s) => s.judge_id === profile?.id && s.finalist_id === id
     );
 
+    return row ? String(row.score) : '';
+  };
+
+  // SIMPAN SATU NILAI.
+  const saveScore = async (f: Finalist, kind: 'speech' | 'qna') => {
+    if (!profile || locked) {
+      notify('Penilaian sedang dikunci admin');
+      return;
+    }
+
+    const key = `${kind}:${f.id}`;
+    const raw = scoreInputs[key] ?? myScore(kind, f.id);
+
+    if (raw.trim() === '') {
+      notify('Masukkan nilai terlebih dahulu');
+      return;
+    }
+
+    const value = Number(raw);
+
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      notify('Nilai harus antara 0 sampai 100');
+      return;
+    }
+
+    const table = kind === 'speech' ? 'speech_scores' : 'qna_scores';
+
+    setBusy(true);
+
+    const { error } = await supabase.from(table).upsert(
+      {
+        judge_id: profile.id,
+        finalist_id: f.id,
+        score: value,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'judge_id,finalist_id' }
+    );
+
+    setBusy(false);
+
+    if (error) {
+      notify(`Gagal menyimpan nilai: ${error.message}`);
+    } else {
+      notify(`Nilai ${kind === 'speech' ? 'Speech' : 'QnA'} ${f.name} berhasil disimpan`);
+      setScoreInputs((current) => {
+        const updated = { ...current };
+        delete updated[key];
+        return updated;
+      });
+      await load();
+    }
+  };
+
+  // SIMPAN SEMUA NILAI PER GENDER.
+  const saveAllScores = async (g: Gender, kind: 'speech' | 'qna') => {
+    if (!profile || locked) {
+      notify('Penilaian sedang dikunci admin');
+      return;
+    }
+
+    const candidates =
+      kind === 'speech'
+        ? rankedSpeech(g)
+        : topSix(g);
+
+    const table = kind === 'speech' ? 'speech_scores' : 'qna_scores';
+
+    const rows: {
+      judge_id: string;
+      finalist_id: string;
+      score: number;
+      updated_at: string;
+    }[] = [];
+
+    for (const f of candidates) {
+      const key = `${kind}:${f.id}`;
+      const raw = scoreInputs[key] ?? myScore(kind, f.id);
+
+      // Nilai kosong dilewati dan tidak menimpa nilai lama.
+      if (raw.trim() === '') continue;
+
+      const value = Number(raw);
+
+      if (!Number.isFinite(value) || value < 0 || value > 100) {
+        notify(`Nilai ${f.name} harus antara 0 sampai 100`);
+        return;
+      }
+
+      rows.push({
+        judge_id: profile.id,
+        finalist_id: f.id,
+        score: value,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    if (!rows.length) {
+      notify('Belum ada nilai yang diisi');
+      return;
+    }
+
+    setBusy(true);
+
+    const { error } = await supabase
+      .from(table)
+      .upsert(rows, { onConflict: 'judge_id,finalist_id' });
+
+    setBusy(false);
+
+    if (error) {
+      notify(`Gagal menyimpan nilai: ${error.message}`);
+    } else {
+      notify(
+        `${rows.length} nilai ${kind.toUpperCase()} ${genderLabel(g)} berhasil disimpan`
+      );
+
+      setScoreInputs((current) => {
+        const updated = { ...current };
+
+        candidates.forEach((f) => {
+          delete updated[`${kind}:${f.id}`];
+        });
+
+        return updated;
+      });
+
+      await load();
+    }
+  };
+
+  // KELOLA JURI.
   const addOrUpdateJudge = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -354,7 +495,11 @@ const rankedQna = (g: Gender) =>
     if (result.error) {
       notify(result.error.message);
     } else {
-      notify(editJudge ? 'Data juri diperbarui' : 'Akun dan profil juri berhasil dibuat');
+      notify(
+        editJudge
+          ? 'Data juri diperbarui'
+          : 'Akun dan profil juri berhasil dibuat'
+      );
 
       setJudgeName('');
       setJudgeUsername('');
@@ -389,6 +534,7 @@ const rankedQna = (g: Gender) =>
     load();
   };
 
+  // TAMBAH / EDIT FINALIS.
   const saveFinalist = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -428,44 +574,46 @@ const rankedQna = (g: Gender) =>
     setGender(f.gender);
   };
 
-const deleteFinalist = async (id: string) => {
-  if (
-    !confirm(
-      'Hapus finalis ini beserta seluruh nilai Speech dan QnA-nya?'
-    )
-  ) {
-    return;
-  }
+  // HAPUS FINALIS DAN PERBARUI DATA LOKAL.
+  const deleteFinalist = async (id: string) => {
+    if (
+      !confirm(
+        'Hapus finalis ini beserta seluruh nilai Speech dan QnA-nya?'
+      )
+    ) {
+      return;
+    }
 
-  setBusy(true);
+    setBusy(true);
 
-  const { data, error } = await supabase
-    .from('finalists')
-    .delete()
-    .eq('id', id)
-    .select('id');
+    const { data, error } = await supabase
+      .from('finalists')
+      .delete()
+      .eq('id', id)
+      .select('id');
 
-  setBusy(false);
+    setBusy(false);
 
-  if (error) {
-    notify(`Gagal menghapus finalis: ${error.message}`);
-    return;
-  }
+    if (error) {
+      notify(`Gagal menghapus finalis: ${error.message}`);
+      return;
+    }
 
-  if (!data || data.length === 0) {
-    notify('Finalis tidak terhapus. Periksa izin DELETE pada Supabase.');
+    if (!data || data.length === 0) {
+      notify('Finalis tidak terhapus. Periksa izin DELETE pada Supabase.');
+      await load();
+      return;
+    }
+
+    setFinalists((current) => current.filter((f) => f.id !== id));
+    setSpeech((current) => current.filter((s) => s.finalist_id !== id));
+    setQna((current) => current.filter((s) => s.finalist_id !== id));
+
+    notify('Finalis berhasil dihapus');
     await load();
-    return;
-  }
+  };
 
-  setFinalists((current) => current.filter((f) => f.id !== id));
-  setSpeech((current) => current.filter((s) => s.finalist_id !== id));
-  setQna((current) => current.filter((s) => s.finalist_id !== id));
-
-  notify('Finalis berhasil dihapus');
-  await load();
-};
-
+  // IMPORT FINALIS.
   const importFinalists = async () => {
     const lines = importText.trim().split(/\r?\n/).filter(Boolean);
 
@@ -496,86 +644,7 @@ const deleteFinalist = async (id: string) => {
     }
   };
 
-  const saveAllScores = async (g: Gender, kind: 'speech' | 'qna') => {
-  if (!profile || locked) {
-    notify('Penilaian sedang dikunci admin');
-    return;
-  }
-
-  const candidates =
-    kind === 'speech'
-      ? rankedSpeech(g)
-      : topSix(g);
-
-  const table = kind === 'speech' ? 'speech_scores' : 'qna_scores';
-
-  const rows: {
-    judge_id: string;
-    finalist_id: string;
-    score: number;
-    updated_at: string;
-  }[] = [];
-
-  for (const f of candidates) {
-    const key = `${kind}:${f.id}`;
-    const raw = scoreInputs[key] ?? myScore(kind, f.id);
-
-    // Kolom kosong dilewati, tidak menghapus atau menimpa nilai lama.
-    if (raw.trim() === '') continue;
-
-    const value = Number(raw);
-
-    if (!Number.isFinite(value) || value < 0 || value > 100) {
-      notify(`Nilai ${f.name} harus antara 0 sampai 100`);
-      return;
-    }
-
-    rows.push({
-      judge_id: profile.id,
-      finalist_id: f.id,
-      score: value,
-      updated_at: new Date().toISOString(),
-    });
-  }
-
-  if (!rows.length) {
-    notify('Belum ada nilai yang diisi');
-    return;
-  }
-
-  setBusy(true);
-
-  const { error } = await supabase
-    .from(table)
-    .upsert(rows, { onConflict: 'judge_id,finalist_id' });
-
-  setBusy(false);
-
-  if (error) {
-    notify(`Gagal menyimpan nilai: ${error.message}`);
-  } else {
-    notify(`${rows.length} nilai ${kind.toUpperCase()} ${genderLabel(g)} berhasil disimpan`);
-    setScoreInputs((current) => {
-      const updated = { ...current };
-      candidates.forEach((f) => {
-        delete updated[`${kind}:${f.id}`];
-      });
-      return updated;
-    });
-    await load();
-  }
-};
-
-  const myScore = (kind: 'speech' | 'qna', id: string) => {
-    const list = kind === 'speech' ? speech : qna;
-
-    const row = list.find(
-      (s) => s.judge_id === profile?.id && s.finalist_id === id
-    );
-
-    return row ? String(row.score) : '';
-  };
-
+  // KUNCI / BUKA PENILAIAN.
   const setLock = async () => {
     const { error } = await supabase
       .from('event_settings')
@@ -601,9 +670,12 @@ const deleteFinalist = async (id: string) => {
         : rankedQna(g);
 
   const nav = tabs.filter(
-    (t) => (t.admin ? isAdmin : true) && (t.jury ? profile?.role === 'juri' : true)
+    (t) =>
+      (t.admin ? isAdmin : true) &&
+      (t.jury ? profile?.role === 'juri' : true)
   );
 
+  // TAMPILAN LOGIN.
   if (!session) {
     return (
       <main className="min-h-screen grid place-items-center p-5">
@@ -696,12 +768,8 @@ const deleteFinalist = async (id: string) => {
     );
   }
 
+  // TABEL INPUT NILAI SPEECH DAN QNA.
   const scoreTable = (kind: 'speech' | 'qna') => {
-    const candidates =
-      kind === 'speech'
-        ? rankedSpeech('putra').concat(rankedSpeech('putri'))
-        : topSix('putra').concat(topSix('putri'));
-
     return (
       <div className="panel overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
@@ -723,38 +791,43 @@ const deleteFinalist = async (id: string) => {
           </span>
         </div>
 
-     {(['putra', 'putri'] as Gender[]).map((g) => (
-  <div key={g}>
-    <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3">
-      <span className="text-sm font-bold">
-        Finalis {genderLabel(g)}
-      </span>
+        {(['putra', 'putri'] as Gender[]).map((g) => {
+          const candidates =
+            kind === 'speech' ? rankedSpeech(g) : topSix(g);
 
-      <button
-        className="btn btn-primary"
-        disabled={locked || busy}
-        onClick={() => saveAllScores(g, kind)}
-      >
-        {busy ? 'Menyimpan...' : `Simpan Semua ${genderLabel(g)}`}
-      </button>
-    </div>
+          return (
+            <div key={g}>
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3">
+                <span className="text-sm font-bold">
+                  Finalis {genderLabel(g)}
+                </span>
 
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>No</th>
-                    <th>Nama Finalis</th>
-                    <th>Program Studi</th>
-                    <th>Nilai 0–100</th>
-                    <th>Rata-rata / Total</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
+                <button
+                  className="btn btn-primary"
+                  disabled={locked || busy}
+                  onClick={() => saveAllScores(g, kind)}
+                >
+                  {busy
+                    ? 'Menyimpan...'
+                    : `Simpan Semua ${genderLabel(g)}`}
+                </button>
+              </div>
 
-                <tbody>
-                  {(kind === 'speech' ? rankedSpeech(g) : topSix(g)).map(
-                    (f, i) => {
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>No</th>
+                      <th>Nama Finalis</th>
+                      <th>Program Studi</th>
+                      <th>Nilai 0–100</th>
+                      <th>Rata-rata / Total</th>
+                      <th>Aksi</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {candidates.map((f, i) => {
                       const key = `${kind}:${f.id}`;
                       const v = scoreInputs[key] ?? myScore(kind, f.id);
                       const total =
@@ -773,7 +846,7 @@ const deleteFinalist = async (id: string) => {
                               max="100"
                               step="0.1"
                               value={v}
-                              disabled={locked}
+                              disabled={locked || busy}
                               placeholder="0–100"
                               onChange={(e) =>
                                 setScoreInputs((s) => ({
@@ -787,7 +860,7 @@ const deleteFinalist = async (id: string) => {
                           <td>
                             <button
                               className="btn btn-primary"
-                              disabled={locked}
+                              disabled={locked || busy}
                               onClick={() => saveScore(f, kind)}
                             >
                               Simpan
@@ -795,30 +868,97 @@ const deleteFinalist = async (id: string) => {
                           </td>
                         </tr>
                       );
-                    }
-                  )}
+                    })}
 
-                  {!(kind === 'speech'
-                    ? rankedSpeech(g)
-                    : topSix(g)
-                  ).length && (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center muted">
-                        Belum ada finalis pada kategori ini.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    {!candidates.length && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center muted">
+                          Belum ada finalis pada kategori ini.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
 
   return (
     <div className="min-h-screen lg:flex">
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 15mm;
+          }
+
+          html,
+          body {
+            background: white !important;
+            color: black !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          body * {
+            visibility: hidden !important;
+          }
+
+          .print-document,
+          .print-document * {
+            visibility: visible !important;
+          }
+
+          .print-document {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
+            color: black !important;
+          }
+
+          .print-document table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+
+          .print-document th,
+          .print-document td {
+            border: 1px solid black !important;
+            padding: 7px !important;
+            color: black !important;
+            font-size: 10pt !important;
+          }
+
+          .print-document tr {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+
+          .print-document h2,
+          .print-document h3,
+          .print-document h4,
+          .print-document p,
+          .print-document div {
+            color: black !important;
+          }
+
+          .print-document .text-red-800 {
+            color: black !important;
+          }
+        }
+      `}</style>
+
       <aside className="bg-[#151d2e] p-4 text-white lg:fixed lg:inset-y-0 lg:w-64">
         <div className="flex items-center gap-3 px-2 py-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-red-800">
@@ -1239,6 +1379,7 @@ const deleteFinalist = async (id: string) => {
 
                                 <button
                                   className="btn btn-danger"
+                                  disabled={busy}
                                   onClick={() => deleteFinalist(f.id)}
                                 >
                                   <Trash2 size={14} />
@@ -1298,13 +1439,15 @@ const deleteFinalist = async (id: string) => {
                             {speechAverage(f).toFixed(2)}
                           </td>
                           <td>
-                           {topSix(g).some((candidate) => candidate.id === f.id) ? (
-  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
-    LOLOS QnA
-  </span>
-) : (
-  <span className="text-slate-400">Belum lolos</span>
-)}
+                            {topSix(g).some((candidate) => candidate.id === f.id) ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                                LOLOS QnA
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">
+                                Belum lolos
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
