@@ -14,16 +14,17 @@ Aplikasi Next.js + Supabase berdasarkan file HTML sumber terbaru yang disertakan
 ## 1. Menyiapkan Supabase
 1. Buat project Supabase.
 2. Buka **SQL Editor → New query**.
-3. Jalankan `supabase/migrations/0001_initial_schema.sql` di SQL Editor.
-4. Jalankan juga `supabase/migrations/0002_username_login.sql` untuk menambahkan username login. Jika profil Admin sudah dibuat pada tahap sebelumnya, migrasi ini otomatis memberi username `admin`.
-5. Buka **Authentication → Users → Add user** dan buat akun admin dengan email serta password yang aman.
-6. Salin UUID admin. Buka `supabase/SETUP_PROFILES.sql`, ganti `GANTI-DENGAN-UUID-AUTH-ADMIN` dan nama admin, lalu jalankan di SQL Editor.
-7. Setelah profil Admin tersedia, akun juri dapat dibuat langsung dari menu **Kelola Data Juri**. Admin mengisi nama, username, password awal, dan jabatan; server membuat akun Supabase Auth sekaligus profilnya. Maksimal lima juri.
+3. Jalankan `supabase/migrations/0001_initial_schema.sql` hanya jika ini project Supabase BARU dan tabel belum pernah dibuat.
+4. Untuk project BARU, jalankan `supabase/migrations/0002_username_login.sql` setelah memastikan belum ada username duplikat.
+5. Buat akun Admin di **Authentication → Users** jika belum ada, lalu buat profil Admin sesuai `supabase/SETUP_PROFILES.sql`.
+6. Setelah profil Admin tersedia, akun Juri dapat dibuat dari menu **Kelola Data Juri**. Maksimal lima juri.
+
+**PENTING UNTUK DATABASE YANG SUDAH KAMU BUAT:** jangan jalankan ulang `0001_initial_schema.sql` atau `0002_username_login.sql` secara otomatis. Periksa dulu apakah kolom `profiles.username` dan unique index-nya sudah ada. Jangan menghapus profil atau data yang sudah tersimpan.
 
 ## 2. Konfigurasi aplikasi
 1. Salin `.env.example` menjadi `.env.local`.
 2. Isi `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` (atau publishable key) dari **Project Settings → API**.
-3. Isi `SUPABASE_SERVICE_ROLE_KEY` dengan secret/service_role key dari Supabase. Key ini hanya digunakan oleh route server untuk login berbasis username dan membuat akun juri. Jangan beri awalan `NEXT_PUBLIC_`, jangan kirim ke browser, dan jangan commit `.env.local` ke GitHub.
+3. Isi `SUPABASE_SERVICE_ROLE_KEY` dengan secret/service_role key dari Supabase. Key ini hanya digunakan oleh route server untuk mencari email Auth berdasarkan username Juri dan membuat akun Juri. Login Admin dengan email tidak memerlukan service role key. Jangan beri awalan `NEXT_PUBLIC_`, jangan kirim ke browser, dan jangan commit `.env.local` ke GitHub.
 
 ## 3. Menjalankan lokal
 ```bash
@@ -44,7 +45,7 @@ npm run build
 4. Deploy ulang setelah menambahkan environment variables.
 
 ## Keamanan
-- Admin dan Juri memakai satu halaman login dengan username dan password. Username Admin awal adalah `admin`; password tetap password akun Auth Admin yang sudah dibuat. Juri menggunakan username yang dibuat Admin.
+- Admin masuk menggunakan email Supabase Auth (misalnya `adedwiputra@teknokrat.ac.id`) dan password akun tersebut. Juri masuk menggunakan username yang dibuat Admin dan password awalnya.
 - Row Level Security membatasi admin untuk pengelolaan data dan juri hanya untuk nilai miliknya sendiri.
 - Database memvalidasi rentang nilai 0–100, maksimal 5 profil juri, dan QnA hanya untuk Top 6 per kategori.
 - Kunci penilaian tersedia di dashboard admin.
