@@ -4,95 +4,97 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
-<<<<<<< HEAD
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Konfigurasi server untuk login username belum lengkap.');
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  if (!url || !key) {
+    throw new Error('Konfigurasi Supabase server belum lengkap.');
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const identifier = String(body.identifier || body.username || '').trim();
+
+    // Mendukung identifier, username, atau email
+    const identifier = String(
+      body.identifier || body.username || body.email || ''
+    )
+      .trim()
+      .toLowerCase();
+
     const password = String(body.password || '');
+
     if (!identifier || !password) {
-      return NextResponse.json({ error: 'Email/username dan password wajib diisi.' }, { status: 400 });
-=======
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-
-    const email = String(body.email || '').trim().toLowerCase();
-    const password = String(body.password || '');
-
-    if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email dan password wajib diisi.' },
+        { error: 'Email/username dan password wajib diisi.' },
         { status: 400 }
       );
->>>>>>> 9b0bfd65b704dfe2719e1db8b58259e18cf7c16e
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-<<<<<<< HEAD
-    if (!url || !anon) throw new Error('NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY wajib diisi.');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    // Admin dapat masuk langsung dengan email Supabase Auth.
-    // Juri dapat masuk menggunakan username yang dipetakan ke email Auth internal.
-    let email = identifier.toLowerCase();
-    if (!identifier.includes('@')) {
-      if (!/^[a-z0-9._-]{3,30}$/i.test(identifier)) {
-        return NextResponse.json({ error: 'Format username tidak valid.' }, { status: 400 });
-      }
-      const admin = getAdminClient();
-      const { data: profile, error: profileError } = await admin
-        .from('profiles').select('id').eq('username', identifier.toLowerCase()).maybeSingle();
-      if (profileError || !profile) {
-        return NextResponse.json({ error: 'Username atau password salah.' }, { status: 401 });
-      }
-      const { data: userData, error: userError } = await admin.auth.admin.getUserById(profile.id);
-      email = userData.user?.email || '';
-      if (userError || !email) {
-        return NextResponse.json({ error: 'Akun tidak dapat digunakan. Hubungi Admin.' }, { status: 401 });
-      }
-    }
-
-    const auth = createClient(url, anon, { auth: { autoRefreshToken: false, persistSession: false } });
-    const { data, error } = await auth.auth.signInWithPassword({ email, password });
-    if (error || !data.session) {
-      return NextResponse.json({ error: 'Email/username atau password salah.' }, { status: 401 });
-    }
-    return NextResponse.json({ session: {
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-    } });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Terjadi kesalahan server.' }, { status: 500 });
-=======
-
-    if (!url || !anon) {
+    if (!supabaseUrl || !anonKey) {
       throw new Error('Konfigurasi Supabase belum lengkap.');
     }
 
-    const supabase = createClient(url, anon, {
+    let email = identifier;
+
+    // Jika bukan email, cari email berdasarkan username Juri/Admin
+    if (!identifier.includes('@')) {
+      const admin = getAdminClient();
+
+      const { data: profile, error: profileError } = await admin
+        .from('profiles')
+        .select('id')
+        .ilike('username', identifier)
+        .maybeSingle();
+
+      if (profileError || !profile) {
+        return NextResponse.json(
+          { error: 'Username atau password salah.' },
+          { status: 401 }
+        );
+      }
+
+      const { data: userData, error: userError } =
+        await admin.auth.admin.getUserById(profile.id);
+
+      if (userError || !userData.user?.email) {
+        return NextResponse.json(
+          { error: 'Akun tidak ditemukan. Hubungi Admin.' },
+          { status: 401 }
+        );
+      }
+
+      email = userData.user.email;
+    }
+
+    // Login menggunakan Supabase Auth
+    const auth = createClient(supabaseUrl, anonKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
 
-    const { data, error } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { data, error } = await auth.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error || !data.session) {
       return NextResponse.json(
-        { error: 'Email atau password salah.' },
+        { error: 'Email/username atau password salah.' },
         { status: 401 }
       );
     }
@@ -103,17 +105,17 @@ export async function POST(request: NextRequest) {
         refresh_token: data.session.refresh_token,
       },
     });
-
   } catch (error) {
+    console.error('Login error:', error);
+
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : 'Terjadi kesalahan server.',
+            : 'Terjadi kesalahan pada server.',
       },
       { status: 500 }
     );
->>>>>>> 9b0bfd65b704dfe2719e1db8b58259e18cf7c16e
   }
 }
