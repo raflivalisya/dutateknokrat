@@ -12,7 +12,7 @@ const tabs:{id:Tab;label:string;icon:any;admin?:boolean;jury?:boolean}[]=[
 ];
 export default function Home(){
  const supabase=useMemo(()=>createClient(),[]);
- const [session,setSession]=useState<any>(null),[profile,setProfile]=useState<Profile|null>(null),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const [session,setSession]=useState<any>(null),[profile,setProfile]=useState<Profile|null>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [tab,setTab]=useState<Tab>('dashboard'),[finalists,setFinalists]=useState<Finalist[]>([]),[judges,setJudges]=useState<Profile[]>([]),[speech,setSpeech]=useState<Score[]>([]),[qna,setQna]=useState<Score[]>([]),[locked,setLocked]=useState(false);
  const [judgeName,setJudgeName]=useState(''),[judgeUsername,setJudgeUsername]=useState(''),[judgePassword,setJudgePassword]=useState(''),[judgeTitle,setJudgeTitle]=useState(JUDGE_ROLES[0]),[editJudge,setEditJudge]=useState<string|null>(null);
  const [name,setName]=useState(''),[prodi,setProdi]=useState(STUDY_PROGRAMS[0]),[gender,setGender]=useState<Gender>('putra'),[editFinalist,setEditFinalist]=useState<string|null>(null),[importText,setImportText]=useState('');
