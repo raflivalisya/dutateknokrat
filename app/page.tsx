@@ -272,9 +272,12 @@ const rankedSpeech = (g: Gender) =>
 // Nilai 0 tetap dianggap sudah dinilai.
 const rankedSpeechWithScores = (g: Gender) =>
   rankedSpeech(g).filter((f) =>
-    speech.some((s) => s.finalist_id === f.id)
+    speech.some(
+      (s) =>
+        s.finalist_id === f.id &&
+        Number(s.score) > 0
+    )
   );
-
 // Maksimal 6 finalis Putra dan 6 finalis Putri.
 const topSix = (g: Gender) =>
   rankedSpeechWithScores(g).slice(0, 6);
