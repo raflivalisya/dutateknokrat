@@ -889,7 +889,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen lg:flex">
-      <style jsx global>{`
 
 <style jsx global>{`
   @media screen {
