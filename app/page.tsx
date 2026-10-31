@@ -890,74 +890,116 @@ export default function Home() {
   return (
     <div className="min-h-screen lg:flex">
       <style jsx global>{`
-        @media print {
-          @page {
-            size: A4 landscape;
-            margin: 15mm;
-          }
 
-          html,
-          body {
-            background: white !important;
-            color: black !important;
-            height: auto !important;
-            overflow: visible !important;
-          }
+<style jsx global>{`
+  @media screen {
+    .print-document {
+      background: white;
+    }
+  }
 
-          body * {
-            visibility: hidden !important;
-          }
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 12mm;
+    }
 
-          .print-document,
-          .print-document * {
-            visibility: visible !important;
-          }
+    html,
+    body {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      background: white !important;
+    }
 
-          .print-document {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            max-width: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: white !important;
-            color: black !important;
-          }
+    body * {
+      visibility: hidden !important;
+    }
 
-          .print-document table {
-            width: 100% !important;
-            border-collapse: collapse !important;
-          }
+    .print-document,
+    .print-document * {
+      visibility: visible !important;
+    }
 
-          .print-document th,
-          .print-document td {
-            border: 1px solid black !important;
-            padding: 7px !important;
-            color: black !important;
-            font-size: 10pt !important;
-          }
+    .print-document {
+      display: block !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      max-width: none !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      background: white !important;
+      color: black !important;
+      z-index: 999999 !important;
+    }
 
-          .print-document tr {
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-          }
+    .print-document table {
+      display: table !important;
+      width: 100% !important;
+      border-collapse: collapse !important;
+      page-break-inside: auto !important;
+    }
 
-          .print-document h2,
-          .print-document h3,
-          .print-document h4,
-          .print-document p,
-          .print-document div {
-            color: black !important;
-          }
+    .print-document thead {
+      display: table-header-group !important;
+    }
 
-          .print-document .text-red-800 {
-            color: black !important;
-          }
-        }
-      `}</style>
+    .print-document tbody {
+      display: table-row-group !important;
+    }
+
+    .print-document tr {
+      display: table-row !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    .print-document th,
+    .print-document td {
+      display: table-cell !important;
+      border: 1px solid black !important;
+      padding: 7px !important;
+      color: black !important;
+      font-size: 10pt !important;
+    }
+
+    .print-document h2,
+    .print-document h3,
+    .print-document h4,
+    .print-document p,
+    .print-document div {
+      color: black !important;
+    }
+
+    .print-document .text-red-800 {
+      color: black !important;
+    }
+
+    .print-document .grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .print-document .border-b {
+      border-bottom: 1px solid black !important;
+    }
+
+    .print-document .border-double {
+      border-bottom: 4px double black !important;
+    }
+  }
+`}</style>
+
 
       <aside className="bg-[#151d2e] p-4 text-white lg:fixed lg:inset-y-0 lg:w-64">
         <div className="flex items-center gap-3 px-2 py-3">
