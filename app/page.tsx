@@ -428,20 +428,43 @@ const rankedQna = (g: Gender) =>
     setGender(f.gender);
   };
 
-  const deleteFinalist = async (id: string) => {
-    if (
-      !confirm(
-        'Hapus finalis ini beserta seluruh nilai Speech dan QnA-nya?'
-      )
-    ) {
-      return;
-    }
+const deleteFinalist = async (id: string) => {
+  if (
+    !confirm(
+      'Hapus finalis ini beserta seluruh nilai Speech dan QnA-nya?'
+    )
+  ) {
+    return;
+  }
 
-    const { error } = await supabase.from('finalists').delete().eq('id', id);
+  setBusy(true);
 
-    notify(error?.message || 'Finalis dihapus');
-    load();
-  };
+  const { data, error } = await supabase
+    .from('finalists')
+    .delete()
+    .eq('id', id)
+    .select('id');
+
+  setBusy(false);
+
+  if (error) {
+    notify(`Gagal menghapus finalis: ${error.message}`);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    notify('Finalis tidak terhapus. Periksa izin DELETE pada Supabase.');
+    await load();
+    return;
+  }
+
+  setFinalists((current) => current.filter((f) => f.id !== id));
+  setSpeech((current) => current.filter((s) => s.finalist_id !== id));
+  setQna((current) => current.filter((s) => s.finalist_id !== id));
+
+  notify('Finalis berhasil dihapus');
+  await load();
+};
 
   const importFinalists = async () => {
     const lines = importText.trim().split(/\r?\n/).filter(Boolean);
@@ -473,46 +496,75 @@ const rankedQna = (g: Gender) =>
     }
   };
 
-  const saveScore = async (f: Finalist, kind: 'speech' | 'qna') => {
-    if (!profile || locked) {
-      notify('Penilaian sedang dikunci admin');
-      return;
-    }
+  const saveAllScores = async (g: Gender, kind: 'speech' | 'qna') => {
+  if (!profile || locked) {
+    notify('Penilaian sedang dikunci admin');
+    return;
+  }
 
+  const candidates =
+    kind === 'speech'
+      ? rankedSpeech(g)
+      : topSix(g);
+
+  const table = kind === 'speech' ? 'speech_scores' : 'qna_scores';
+
+  const rows: {
+    judge_id: string;
+    finalist_id: string;
+    score: number;
+    updated_at: string;
+  }[] = [];
+
+  for (const f of candidates) {
     const key = `${kind}:${f.id}`;
-    const raw = scoreInputs[key];
+    const raw = scoreInputs[key] ?? myScore(kind, f.id);
 
-    if (raw === undefined || raw.trim() === '') {
-      notify('Masukkan nilai terlebih dahulu');
-      return;
-    }
+    // Kolom kosong dilewati, tidak menghapus atau menimpa nilai lama.
+    if (raw.trim() === '') continue;
 
     const value = Number(raw);
 
     if (!Number.isFinite(value) || value < 0 || value > 100) {
-      notify('Nilai harus 0 sampai 100');
+      notify(`Nilai ${f.name} harus antara 0 sampai 100`);
       return;
     }
 
-    const table = kind === 'speech' ? 'speech_scores' : 'qna_scores';
+    rows.push({
+      judge_id: profile.id,
+      finalist_id: f.id,
+      score: value,
+      updated_at: new Date().toISOString(),
+    });
+  }
 
-    const { error } = await supabase.from(table).upsert(
-      {
-        judge_id: profile.id,
-        finalist_id: f.id,
-        score: value,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'judge_id,finalist_id' }
-    );
+  if (!rows.length) {
+    notify('Belum ada nilai yang diisi');
+    return;
+  }
 
-    if (error) {
-      notify(error.message);
-    } else {
-      notify(`Nilai ${kind === 'speech' ? 'Speech' : 'QnA'} tersimpan`);
-      load();
-    }
-  };
+  setBusy(true);
+
+  const { error } = await supabase
+    .from(table)
+    .upsert(rows, { onConflict: 'judge_id,finalist_id' });
+
+  setBusy(false);
+
+  if (error) {
+    notify(`Gagal menyimpan nilai: ${error.message}`);
+  } else {
+    notify(`${rows.length} nilai ${kind.toUpperCase()} ${genderLabel(g)} berhasil disimpan`);
+    setScoreInputs((current) => {
+      const updated = { ...current };
+      candidates.forEach((f) => {
+        delete updated[`${kind}:${f.id}`];
+      });
+      return updated;
+    });
+    await load();
+  }
+};
 
   const myScore = (kind: 'speech' | 'qna', id: string) => {
     const list = kind === 'speech' ? speech : qna;
@@ -671,11 +723,21 @@ const rankedQna = (g: Gender) =>
           </span>
         </div>
 
-        {(['putra', 'putri'] as Gender[]).map((g) => (
-          <div key={g}>
-            <div className="bg-slate-50 px-5 py-3 text-sm font-bold">
-              Finalis {genderLabel(g)}
-            </div>
+     {(['putra', 'putri'] as Gender[]).map((g) => (
+  <div key={g}>
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3">
+      <span className="text-sm font-bold">
+        Finalis {genderLabel(g)}
+      </span>
+
+      <button
+        className="btn btn-primary"
+        disabled={locked || busy}
+        onClick={() => saveAllScores(g, kind)}
+      >
+        {busy ? 'Menyimpan...' : `Simpan Semua ${genderLabel(g)}`}
+      </button>
+    </div>
 
             <div className="table-wrap">
               <table>
@@ -1236,13 +1298,13 @@ const rankedQna = (g: Gender) =>
                             {speechAverage(f).toFixed(2)}
                           </td>
                           <td>
-                            {i < 6 ? (
-                              <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
-                                LOLOS QnA
-                              </span>
-                            ) : (
-                              '-'
-                            )}
+                           {topSix(g).some((candidate) => candidate.id === f.id) ? (
+  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+    LOLOS QnA
+  </span>
+) : (
+  <span className="text-slate-400">Belum lolos</span>
+)}
                           </td>
                         </tr>
                       ))}
