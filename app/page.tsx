@@ -248,33 +248,52 @@ export default function Home() {
   const isAdmin = profile?.role === 'admin';
 
   const speechAverage = (f: Finalist) => {
-    const total = speech
-      .filter((s) => s.finalist_id === f.id)
-      .reduce((n, s) => n + Number(s.score), 0);
+  const total = speech
+    .filter((s) => s.finalist_id === f.id)
+    .reduce((n, s) => n + Number(s.score), 0);
 
-    return judges.length ? total / judges.length : 0;
-  };
+  // Nilai juri yang belum masuk dihitung 0.
+  return judges.length ? total / judges.length : 0;
+};
 
-  const rankedSpeech = (g: Gender) =>
-    finalists
-      .filter((f) => f.gender === g)
-      .slice()
-      .sort(
-        (a, b) =>
-          speechAverage(b) - speechAverage(a) ||
-          a.created_at.localeCompare(b.created_at) ||
-          a.name.localeCompare(b.name)
-      );
+// Urutan seluruh finalis berdasarkan rata-rata Speech.
+const rankedSpeech = (g: Gender) =>
+  finalists
+    .filter((f) => f.gender === g)
+    .slice()
+    .sort(
+      (a, b) =>
+        speechAverage(b) - speechAverage(a) ||
+        a.created_at.localeCompare(b.created_at) ||
+        a.name.localeCompare(b.name)
+    );
 
-  const topSix = (g: Gender) => rankedSpeech(g).slice(0, 6);
+// Hanya finalis yang sudah memiliki nilai Speech yang bisa lolos.
+// Nilai 0 tetap dianggap sudah dinilai.
+const rankedSpeechWithScores = (g: Gender) =>
+  rankedSpeech(g).filter((f) =>
+    speech.some((s) => s.finalist_id === f.id)
+  );
 
-  const qnaTotal = (f: Finalist) =>
-    qna
-      .filter((s) => s.finalist_id === f.id)
-      .reduce((n, s) => n + Number(s.score), 0);
+// Maksimal 6 finalis Putra dan 6 finalis Putri.
+const topSix = (g: Gender) =>
+  rankedSpeechWithScores(g).slice(0, 6);
 
-  const rankedQna = (g: Gender) =>
-    topSix(g).slice().sort((a, b) => qnaTotal(b) - qnaTotal(a));
+const qnaTotal = (f: Finalist) =>
+  qna
+    .filter((s) => s.finalist_id === f.id)
+    .reduce((n, s) => n + Number(s.score), 0);
+
+// Peringkat QnA berdasarkan total nilai QnA.
+const rankedQna = (g: Gender) =>
+  topSix(g)
+    .slice()
+    .sort(
+      (a, b) =>
+        qnaTotal(b) - qnaTotal(a) ||
+        a.created_at.localeCompare(b.created_at) ||
+        a.name.localeCompare(b.name)
+    );
 
   const addOrUpdateJudge = async (e: React.FormEvent) => {
     e.preventDefault();
