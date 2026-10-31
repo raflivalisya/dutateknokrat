@@ -1,76 +1,1440 @@
+
 'use client';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Finalist, Profile, Score, STUDY_PROGRAMS, JUDGE_ROLES, WINNER_TITLES } from '@/lib/types';
-import { Award, BarChart3, FileText, LogOut, Plus, ShieldCheck, Trophy, Users, Mic, MessageSquare, Lock, Upload, Trash2, Pencil, RefreshCw } from 'lucide-react';
+import {
+  Finalist,
+  Profile,
+  Score,
+  STUDY_PROGRAMS,
+  JUDGE_ROLES,
+  WINNER_TITLES,
+} from '@/lib/types';
+import {
+  Award,
+  BarChart3,
+  FileText,
+  LogOut,
+  Plus,
+  ShieldCheck,
+  Trophy,
+  Users,
+  Mic,
+  MessageSquare,
+  Lock,
+  Upload,
+  Trash2,
+  Pencil,
+  RefreshCw,
+} from 'lucide-react';
 
-type Tab='dashboard'|'juri'|'finalis'|'speech'|'rekap11'|'qna'|'rekap6'|'berita';
-type Gender='putra'|'putri';
-const genderLabel=(g:Gender)=>g==='putra'?'Putra':'Putri';
-const tabs:{id:Tab;label:string;icon:any;admin?:boolean;jury?:boolean}[]=[
- {id:'dashboard',label:'Dashboard',icon:BarChart3,admin:true},{id:'juri',label:'Kelola Data Juri',icon:Users,admin:true},{id:'finalis',label:'Kelola Finalis',icon:Award,admin:true},{id:'speech',label:'Penilaian Speech',icon:Mic,jury:true},{id:'rekap11',label:'Rekap 11 Besar (Speech)',icon:BarChart3,admin:true},{id:'qna',label:'Penilaian 6 Besar (QnA)',icon:MessageSquare,jury:true},{id:'rekap6',label:'Rekap 6 Besar & Pemenang',icon:Trophy,admin:true},{id:'berita',label:'Cetak Berita Acara',icon:FileText,admin:true}
+type Tab =
+  | 'dashboard'
+  | 'juri'
+  | 'finalis'
+  | 'speech'
+  | 'rekap11'
+  | 'qna'
+  | 'rekap6'
+  | 'berita';
+
+type Gender = 'putra' | 'putri';
+
+const genderLabel = (g: Gender) => (g === 'putra' ? 'Putra' : 'Putri');
+
+const tabs: {
+  id: Tab;
+  label: string;
+  icon: any;
+  admin?: boolean;
+  jury?: boolean;
+}[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: BarChart3, admin: true },
+  { id: 'juri', label: 'Kelola Data Juri', icon: Users, admin: true },
+  { id: 'finalis', label: 'Kelola Finalis', icon: Award, admin: true },
+  { id: 'speech', label: 'Penilaian Speech', icon: Mic, jury: true },
+  {
+    id: 'rekap11',
+    label: 'Rekap 11 Besar (Speech)',
+    icon: BarChart3,
+    admin: true,
+  },
+  { id: 'qna', label: 'Penilaian 6 Besar (QnA)', icon: MessageSquare, jury: true },
+  {
+    id: 'rekap6',
+    label: 'Rekap 6 Besar & Pemenang',
+    icon: Trophy,
+    admin: true,
+  },
+  { id: 'berita', label: 'Cetak Berita Acara', icon: FileText, admin: true },
 ];
-export default function Home(){
- const supabase=useMemo(()=>createClient(),[]);
- const [session,setSession]=useState<any>(null),[profile,setProfile]=useState<Profile|null>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const [tab,setTab]=useState<Tab>('dashboard'),[finalists,setFinalists]=useState<Finalist[]>([]),[judges,setJudges]=useState<Profile[]>([]),[speech,setSpeech]=useState<Score[]>([]),[qna,setQna]=useState<Score[]>([]),[locked,setLocked]=useState(false);
- const [judgeName,setJudgeName]=useState(''),[judgeUsername,setJudgeUsername]=useState(''),[judgePassword,setJudgePassword]=useState(''),[judgeTitle,setJudgeTitle]=useState(JUDGE_ROLES[0]),[editJudge,setEditJudge]=useState<string|null>(null);
- const [name,setName]=useState(''),[prodi,setProdi]=useState(STUDY_PROGRAMS[0]),[gender,setGender]=useState<Gender>('putra'),[editFinalist,setEditFinalist]=useState<string|null>(null),[importText,setImportText]=useState('');
- const [scoreInputs,setScoreInputs]=useState<Record<string,string>>({}),[toast,setToast]=useState(''),[report,setReport]=useState<'11'|'6'|'pemenang'>('11');
- const notify=(s:string)=>{setToast(s);window.setTimeout(()=>setToast(''),3000)};
- const load=useCallback(async()=>{
-  const [p,f,s,q,settings]=await Promise.all([
-   supabase.from('profiles').select('*').eq('role','juri').order('created_at'),
-   supabase.from('finalists').select('*').order('created_at'),
-   supabase.from('speech_scores').select('*'),supabase.from('qna_scores').select('*'),
-   supabase.from('event_settings').select('scoring_locked').eq('id',1).maybeSingle()
-  ]);
-  if(p.error)notify(p.error.message); if(f.error)notify(f.error.message); if(s.error)notify(s.error.message); if(q.error)notify(q.error.message);
-  if(p.data)setJudges(p.data as Profile[]);if(f.data)setFinalists(f.data as Finalist[]);if(s.data)setSpeech(s.data as Score[]);if(q.data)setQna(q.data as Score[]);if(settings.data)setLocked(settings.data.scoring_locked);
- },[supabase]);
- useEffect(()=>{supabase.auth.getSession().then(({data})=>setSession(data.session));const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>subscription.unsubscribe()},[supabase]);
- useEffect(()=>{if(!session){setProfile(null);return}supabase.from('profiles').select('*').eq('id',session.user.id).single().then(({data,error})=>{if(data)setProfile(data as Profile);else setError(error?.message||'Profil akun belum dibuat admin.')})},[session,supabase]);
- useEffect(()=>{if(!profile)return;load();const ch=supabase.channel('duta-teknokrat-live').on('postgres_changes',{event:'*',schema:'public',table:'speech_scores'},load).on('postgres_changes',{event:'*',schema:'public',table:'qna_scores'},load).on('postgres_changes',{event:'*',schema:'public',table:'finalists'},load).on('postgres_changes',{event:'*',schema:'public',table:'profiles'},load).subscribe();return()=>{supabase.removeChannel(ch)}},[profile,load,supabase]);
- const signIn=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const response=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username.trim().toLowerCase(),password})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Email/username atau password salah.');const {error}=await supabase.auth.setSession({access_token:payload.session.access_token,refresh_token:payload.session.refresh_token});if(error)throw error;}catch(err){setError(err instanceof Error?err.message:'Login gagal.');}finally{setBusy(false)}};
- const signOut=async()=>{await supabase.auth.signOut();setProfile(null);setTab('dashboard')};
- const isAdmin=profile?.role==='admin';
- const speechAverage=(f:Finalist)=>{const total=speech.filter(s=>s.finalist_id===f.id).reduce((n,s)=>n+Number(s.score),0);return judges.length?total/judges.length:0};
- const rankedSpeech=(g:Gender)=>finalists.filter(f=>f.gender===g).slice().sort((a,b)=>speechAverage(b)-speechAverage(a)||a.created_at.localeCompare(b.created_at)||a.name.localeCompare(b.name));
- const topSix=(g:Gender)=>rankedSpeech(g).slice(0,6);
- const qnaTotal=(f:Finalist)=>qna.filter(s=>s.finalist_id===f.id).reduce((n,s)=>n+Number(s.score),0);
- const rankedQna=(g:Gender)=>topSix(g).slice().sort((a,b)=>qnaTotal(b)-qnaTotal(a));
- const addOrUpdateJudge=async(e:React.FormEvent)=>{e.preventDefault();if(!judgeName.trim())return;setBusy(true);let result:any;
-  if(editJudge){result=await supabase.from('profiles').update({full_name:judgeName.trim(),title:judgeTitle}).eq('id',editJudge)}
-  else {
-   const {data:{session:activeSession}}=await supabase.auth.getSession();
-   if(!activeSession){setBusy(false);notify('Sesi login berakhir. Silakan login kembali.');return}
-   const response=await fetch('/api/admin/judges',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${activeSession.access_token}`},body:JSON.stringify({full_name:judgeName.trim(),username:judgeUsername.trim().toLowerCase(),password:judgePassword,title:judgeTitle})});
-   const payload=await response.json();result={error:response.ok?null:{message:payload.error||'Akun juri gagal dibuat.'}};
+
+export default function Home() {
+  const supabase = useMemo(() => createClient(), []);
+
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  // PERBAIKAN: state username sekarang dideklarasikan.
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const [tab, setTab] = useState<Tab>('dashboard');
+  const [finalists, setFinalists] = useState<Finalist[]>([]);
+  const [judges, setJudges] = useState<Profile[]>([]);
+  const [speech, setSpeech] = useState<Score[]>([]);
+  const [qna, setQna] = useState<Score[]>([]);
+  const [locked, setLocked] = useState(false);
+
+  const [judgeName, setJudgeName] = useState('');
+  const [judgeUsername, setJudgeUsername] = useState('');
+  const [judgePassword, setJudgePassword] = useState('');
+  const [judgeTitle, setJudgeTitle] = useState(JUDGE_ROLES[0]);
+  const [editJudge, setEditJudge] = useState<string | null>(null);
+
+  const [name, setName] = useState('');
+  const [prodi, setProdi] = useState(STUDY_PROGRAMS[0]);
+  const [gender, setGender] = useState<Gender>('putra');
+  const [editFinalist, setEditFinalist] = useState<string | null>(null);
+  const [importText, setImportText] = useState('');
+
+  const [scoreInputs, setScoreInputs] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState('');
+  const [report, setReport] = useState<'11' | '6' | 'pemenang'>('11');
+
+  const notify = (s: string) => {
+    setToast(s);
+    window.setTimeout(() => setToast(''), 3000);
+  };
+
+  const load = useCallback(async () => {
+    const [p, f, s, q, settings] = await Promise.all([
+      supabase.from('profiles').select('*').eq('role', 'juri').order('created_at'),
+      supabase.from('finalists').select('*').order('created_at'),
+      supabase.from('speech_scores').select('*'),
+      supabase.from('qna_scores').select('*'),
+      supabase
+        .from('event_settings')
+        .select('scoring_locked')
+        .eq('id', 1)
+        .maybeSingle(),
+    ]);
+
+    if (p.error) notify(p.error.message);
+    if (f.error) notify(f.error.message);
+    if (s.error) notify(s.error.message);
+    if (q.error) notify(q.error.message);
+
+    if (p.data) setJudges(p.data as Profile[]);
+    if (f.data) setFinalists(f.data as Finalist[]);
+    if (s.data) setSpeech(s.data as Score[]);
+    if (q.data) setQna(q.data as Score[]);
+    if (settings.data) setLocked(settings.data.scoring_locked);
+  }, [supabase]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!session) {
+      setProfile(null);
+      return;
+    }
+
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (data) {
+          setProfile(data as Profile);
+        } else {
+          setError(error?.message || 'Profil akun belum dibuat admin.');
+        }
+      });
+  }, [session, supabase]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    load();
+
+    const ch = supabase
+      .channel('duta-teknokrat-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'speech_scores' },
+        load
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'qna_scores' },
+        load
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'finalists' },
+        load
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        load
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [profile, load, supabase]);
+
+  // LOGIN: menggunakan identifier agar cocok dengan API login.
+  const signIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          identifier: username.trim().toLowerCase(),
+          password,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error || 'Email/username atau password salah.'
+        );
+      }
+
+      const { error } = await supabase.auth.setSession({
+        access_token: payload.session.access_token,
+        refresh_token: payload.session.refresh_token,
+      });
+
+      if (error) throw error;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login gagal.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setProfile(null);
+    setTab('dashboard');
+  };
+
+  const isAdmin = profile?.role === 'admin';
+
+  const speechAverage = (f: Finalist) => {
+    const total = speech
+      .filter((s) => s.finalist_id === f.id)
+      .reduce((n, s) => n + Number(s.score), 0);
+
+    return judges.length ? total / judges.length : 0;
+  };
+
+  const rankedSpeech = (g: Gender) =>
+    finalists
+      .filter((f) => f.gender === g)
+      .slice()
+      .sort(
+        (a, b) =>
+          speechAverage(b) - speechAverage(a) ||
+          a.created_at.localeCompare(b.created_at) ||
+          a.name.localeCompare(b.name)
+      );
+
+  const topSix = (g: Gender) => rankedSpeech(g).slice(0, 6);
+
+  const qnaTotal = (f: Finalist) =>
+    qna
+      .filter((s) => s.finalist_id === f.id)
+      .reduce((n, s) => n + Number(s.score), 0);
+
+  const rankedQna = (g: Gender) =>
+    topSix(g).slice().sort((a, b) => qnaTotal(b) - qnaTotal(a));
+
+  const addOrUpdateJudge = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!judgeName.trim()) return;
+
+    setBusy(true);
+
+    let result: any;
+
+    if (editJudge) {
+      result = await supabase
+        .from('profiles')
+        .update({
+          full_name: judgeName.trim(),
+          title: judgeTitle,
+        })
+        .eq('id', editJudge);
+    } else {
+      const {
+        data: { session: activeSession },
+      } = await supabase.auth.getSession();
+
+      if (!activeSession) {
+        setBusy(false);
+        notify('Sesi login berakhir. Silakan login kembali.');
+        return;
+      }
+
+      const response = await fetch('/api/admin/judges', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeSession.access_token}`,
+        },
+        body: JSON.stringify({
+          full_name: judgeName.trim(),
+          username: judgeUsername.trim().toLowerCase(),
+          password: judgePassword,
+          title: judgeTitle,
+        }),
+      });
+
+      const payload = await response.json();
+
+      result = {
+        error: response.ok
+          ? null
+          : { message: payload.error || 'Akun juri gagal dibuat.' },
+      };
+    }
+
+    setBusy(false);
+
+    if (result.error) {
+      notify(result.error.message);
+    } else {
+      notify(editJudge ? 'Data juri diperbarui' : 'Akun dan profil juri berhasil dibuat');
+
+      setJudgeName('');
+      setJudgeUsername('');
+      setJudgePassword('');
+      setJudgeTitle(JUDGE_ROLES[0]);
+      setEditJudge(null);
+
+      load();
+    }
+  };
+
+  const startEditJudge = (j: Profile) => {
+    setEditJudge(j.id);
+    setJudgeName(j.full_name);
+    setJudgeUsername(j.username || '');
+    setJudgeTitle(j.title || JUDGE_ROLES[0]);
+    setJudgePassword('');
+  };
+
+  const removeJudge = async (id: string) => {
+    if (
+      !confirm(
+        'Hapus profil juri ini? Nilai yang dibuat juri tersebut juga akan terhapus. Akun Auth tidak ikut terhapus.'
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+
+    notify(error?.message || 'Profil juri dihapus');
+    load();
+  };
+
+  const saveFinalist = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!name.trim()) return;
+
+    setBusy(true);
+
+    const payload = {
+      name: name.trim(),
+      study_program: prodi,
+      gender,
+    };
+
+    const result = editFinalist
+      ? await supabase
+          .from('finalists')
+          .update(payload)
+          .eq('id', editFinalist)
+      : await supabase.from('finalists').insert(payload);
+
+    setBusy(false);
+
+    if (result.error) {
+      notify(result.error.message);
+    } else {
+      notify(editFinalist ? 'Finalis diperbarui' : 'Finalis ditambahkan');
+      setName('');
+      setEditFinalist(null);
+      load();
+    }
+  };
+
+  const editFinalistRow = (f: Finalist) => {
+    setEditFinalist(f.id);
+    setName(f.name);
+    setProdi(f.study_program);
+    setGender(f.gender);
+  };
+
+  const deleteFinalist = async (id: string) => {
+    if (
+      !confirm(
+        'Hapus finalis ini beserta seluruh nilai Speech dan QnA-nya?'
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase.from('finalists').delete().eq('id', id);
+
+    notify(error?.message || 'Finalis dihapus');
+    load();
+  };
+
+  const importFinalists = async () => {
+    const lines = importText.trim().split(/\r?\n/).filter(Boolean);
+
+    const rows = lines
+      .map((line) => (line.includes('\t') ? line.split('\t') : line.split(',')))
+      .map((c) => ({
+        gender: (/putra|male|^p$/i.test((c[0] || '').trim())
+          ? 'putra'
+          : 'putri') as Gender,
+        name: (c[1] || '').trim(),
+        study_program: (c[2] || '').trim(),
+      }))
+      .filter((r) => r.name && r.study_program);
+
+    if (!rows.length) {
+      notify('Format harus: gender, nama, program studi');
+      return;
+    }
+
+    const { error } = await supabase.from('finalists').insert(rows);
+
+    if (error) {
+      notify(error.message);
+    } else {
+      notify(`${rows.length} finalis berhasil diimpor`);
+      setImportText('');
+      load();
+    }
+  };
+
+  const saveScore = async (f: Finalist, kind: 'speech' | 'qna') => {
+    if (!profile || locked) {
+      notify('Penilaian sedang dikunci admin');
+      return;
+    }
+
+    const key = `${kind}:${f.id}`;
+    const raw = scoreInputs[key];
+
+    if (raw === undefined || raw.trim() === '') {
+      notify('Masukkan nilai terlebih dahulu');
+      return;
+    }
+
+    const value = Number(raw);
+
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      notify('Nilai harus 0 sampai 100');
+      return;
+    }
+
+    const table = kind === 'speech' ? 'speech_scores' : 'qna_scores';
+
+    const { error } = await supabase.from(table).upsert(
+      {
+        judge_id: profile.id,
+        finalist_id: f.id,
+        score: value,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'judge_id,finalist_id' }
+    );
+
+    if (error) {
+      notify(error.message);
+    } else {
+      notify(`Nilai ${kind === 'speech' ? 'Speech' : 'QnA'} tersimpan`);
+      load();
+    }
+  };
+
+  const myScore = (kind: 'speech' | 'qna', id: string) => {
+    const list = kind === 'speech' ? speech : qna;
+
+    const row = list.find(
+      (s) => s.judge_id === profile?.id && s.finalist_id === id
+    );
+
+    return row ? String(row.score) : '';
+  };
+
+  const setLock = async () => {
+    const { error } = await supabase
+      .from('event_settings')
+      .update({
+        scoring_locked: !locked,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1);
+
+    if (error) {
+      notify(error.message);
+    } else {
+      setLocked(!locked);
+      notify(!locked ? 'Penilaian dikunci' : 'Penilaian dibuka kembali');
+    }
+  };
+
+  const reportRows = (g: Gender) =>
+    report === '11'
+      ? rankedSpeech(g)
+      : report === '6'
+        ? topSix(g)
+        : rankedQna(g);
+
+  const nav = tabs.filter(
+    (t) => (t.admin ? isAdmin : true) && (t.jury ? profile?.role === 'juri' : true)
+  );
+
+  if (!session) {
+    return (
+      <main className="min-h-screen grid place-items-center p-5">
+        <section className="panel w-full max-w-md p-8">
+          <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-red-800 text-white">
+            <Trophy size={28} />
+          </div>
+
+          <div className="text-center">
+            <p className="text-xs font-bold tracking-[.2em] text-red-800">
+              UNIVERSITAS TEKNOKRAT INDONESIA
+            </p>
+
+            <h1 className="mt-2 text-2xl font-black">
+              DUTA TEKNOKRAT <span className="text-red-800">2026</span>
+            </h1>
+
+            <p className="muted mt-2 text-sm">
+              Sistem Penilaian Finalis Resmi
+            </p>
+          </div>
+
+          <form onSubmit={signIn} className="mt-8 space-y-3">
+            <label className="block text-sm font-semibold">
+              Email Admin / Username Juri
+              <input
+                className="field mt-1"
+                type="text"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Email Admin atau username Juri"
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Password
+              <input
+                className="field mt-1"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password akun"
+              />
+            </label>
+
+            {error && (
+              <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+
+            <button className="btn btn-primary w-full" disabled={busy}>
+              {busy ? 'Memproses...' : 'Masuk ke sistem'}
+            </button>
+          </form>
+
+          <p className="muted mt-5 text-center text-xs">
+            Admin masuk menggunakan email Supabase Auth; Juri masuk
+            menggunakan username dan password.
+          </p>
+        </section>
+      </main>
+    );
   }
-  setBusy(false);if(result.error)notify(result.error.message);else{notify(editJudge?'Data juri diperbarui':'Akun dan profil juri berhasil dibuat');setJudgeName('');setJudgeUsername('');setJudgePassword('');setJudgeTitle(JUDGE_ROLES[0]);setEditJudge(null);load()}
- };
- const startEditJudge=(j:Profile)=>{setEditJudge(j.id);setJudgeName(j.full_name);setJudgeUsername(j.username||'');setJudgeTitle(j.title||JUDGE_ROLES[0]);setJudgePassword('')};
- const removeJudge=async(id:string)=>{if(!confirm('Hapus profil juri ini? Nilai yang dibuat juri tersebut juga akan terhapus. Akun Auth tidak ikut terhapus.'))return;const {error}=await supabase.from('profiles').delete().eq('id',id);notify(error?.message||'Profil juri dihapus');load()};
- const saveFinalist=async(e:React.FormEvent)=>{e.preventDefault();if(!name.trim())return;setBusy(true);const payload={name:name.trim(),study_program:prodi,gender};const result=editFinalist?await supabase.from('finalists').update(payload).eq('id',editFinalist):await supabase.from('finalists').insert(payload);setBusy(false);if(result.error)notify(result.error.message);else{notify(editFinalist?'Finalis diperbarui':'Finalis ditambahkan');setName('');setEditFinalist(null);load()}};
- const editFinalistRow=(f:Finalist)=>{setEditFinalist(f.id);setName(f.name);setProdi(f.study_program);setGender(f.gender)};
- const deleteFinalist=async(id:string)=>{if(!confirm('Hapus finalis ini beserta seluruh nilai Speech dan QnA-nya?'))return;const {error}=await supabase.from('finalists').delete().eq('id',id);notify(error?.message||'Finalis dihapus');load()};
- const importFinalists=async()=>{const lines=importText.trim().split(/\r?\n/).filter(Boolean);const rows=lines.map(line=>line.includes('\t')?line.split('\t'):line.split(',')).map(c=>({gender:(/putra|male|^p$/i.test((c[0]||'').trim())?'putra':'putri') as Gender,name:(c[1]||'').trim(),study_program:(c[2]||'').trim()})).filter(r=>r.name&&r.study_program);if(!rows.length){notify('Format harus: gender, nama, program studi');return}const {error}=await supabase.from('finalists').insert(rows);if(error)notify(error.message);else{notify(`${rows.length} finalis berhasil diimpor`);setImportText('');load()}};
- const saveScore=async(f:Finalist,kind:'speech'|'qna')=>{if(!profile||locked){notify('Penilaian sedang dikunci admin');return}const key=`${kind}:${f.id}`,raw=scoreInputs[key];if(raw===undefined||raw.trim()===''){notify('Masukkan nilai terlebih dahulu');return}const value=Number(raw);if(!Number.isFinite(value)||value<0||value>100){notify('Nilai harus 0 sampai 100');return}const table=kind==='speech'?'speech_scores':'qna_scores';const {error}=await supabase.from(table).upsert({judge_id:profile.id,finalist_id:f.id,score:value,updated_at:new Date().toISOString()},{onConflict:'judge_id,finalist_id'});if(error)notify(error.message);else{notify(`Nilai ${kind==='speech'?'Speech':'QnA'} tersimpan`);load()}};
- const myScore=(kind:'speech'|'qna',id:string)=>{const list=kind==='speech'?speech:qna;const row=list.find(s=>s.judge_id===profile?.id&&s.finalist_id===id);return row?String(row.score):''};
- const setLock=async()=>{const {error}=await supabase.from('event_settings').update({scoring_locked:!locked,updated_at:new Date().toISOString()}).eq('id',1);if(error)notify(error.message);else{setLocked(!locked);notify(!locked?'Penilaian dikunci':'Penilaian dibuka kembali')}};
- const reportRows=(g:Gender)=>report==='11'?rankedSpeech(g):report==='6'?topSix(g):rankedQna(g);
- const nav=tabs.filter(t=>(t.admin?isAdmin:true)&&(t.jury?profile?.role==='juri':true));
- if(!session)return <main className="min-h-screen grid place-items-center p-5"><section className="panel w-full max-w-md p-8"><div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-red-800 text-white"><Trophy size={28}/></div><div className="text-center"><p className="text-xs font-bold tracking-[.2em] text-red-800">UNIVERSITAS TEKNOKRAT INDONESIA</p><h1 className="mt-2 text-2xl font-black">DUTA TEKNOKRAT <span className="text-red-800">2026</span></h1><p className="muted mt-2 text-sm">Sistem Penilaian Finalis Resmi</p></div><form onSubmit={signIn} className="mt-8 space-y-3"><label className="block text-sm font-semibold">Email Admin / Username Juri<input className="field mt-1" type="text" autoComplete="username" required value={username} onChange={e=>setUsername(e.target.value)} placeholder="Email Admin atau username Juri"/></label><label className="block text-sm font-semibold">Password<input className="field mt-1" type="password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password akun"/></label>{error&&<p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}<button className="btn btn-primary w-full" disabled={busy}>{busy?'Memproses...':'Masuk ke sistem'}</button></form><p className="muted mt-5 text-center text-xs">Admin masuk menggunakan email Supabase Auth; Juri masuk menggunakan username dan password.</p></section></main>;
- if(!profile)return <main className="min-h-screen grid place-items-center p-5"><div className="panel max-w-lg p-7"><ShieldCheck className="mb-3 text-amber-600" size={30}/><h2 className="text-lg font-bold">Profil akun belum tersedia</h2><p className="muted mt-2 text-sm">Akun berhasil login, tetapi belum memiliki profil pada tabel <code>profiles</code>. Admin perlu menambahkan profil akun ini di menu Kelola Data Juri atau melalui SQL Editor.</p><p className="mt-3 text-xs text-red-700">{error}</p><button className="btn btn-soft mt-4" onClick={signOut}>Keluar</button></div></main>;
- const scoreTable=(kind:'speech'|'qna')=>{const candidates=kind==='speech'?rankedSpeech('putra').concat(rankedSpeech('putri')):topSix('putra').concat(topSix('putri'));return <div className="panel overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b p-5"><div><h2 className="font-bold">{kind==='speech'?'Input Nilai Speech (11 Besar)':'Input Nilai QnA (6 Besar)'}</h2><p className="muted mt-1 text-xs">Satu nilai per finalis, skala 0–100. Nilai tersimpan ke database saat tombol Simpan ditekan.</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">{kind==='speech'?finalists.length:12} slot maksimal</span></div>{(['putra','putri'] as Gender[]).map(g=><div key={g}><div className="bg-slate-50 px-5 py-3 text-sm font-bold">Finalis {genderLabel(g)}</div><div className="table-wrap"><table><thead><tr><th>No</th><th>Nama Finalis</th><th>Program Studi</th><th>Nilai 0–100</th><th>Rata-rata / Total</th><th>Aksi</th></tr></thead><tbody>{(kind==='speech'?rankedSpeech(g):topSix(g)).map((f,i)=>{const key=`${kind}:${f.id}`,v=scoreInputs[key]??myScore(kind,f.id);const total=kind==='speech'?speechAverage(f):qnaTotal(f);return <tr key={f.id}><td>{String(i+1).padStart(2,'0')}</td><td className="font-semibold">{f.name}</td><td>{f.study_program}</td><td><input className="score" type="number" min="0" max="100" step="0.1" value={v} disabled={locked} placeholder="0–100" onChange={e=>setScoreInputs(s=>({...s,[key]:e.target.value}))}/></td><td className="font-bold">{total.toFixed(2)}</td><td><button className="btn btn-primary" disabled={locked} onClick={()=>saveScore(f,kind)}>Simpan</button></td></tr>})}{!(kind==='speech'?rankedSpeech(g):topSix(g)).length&&<tr><td colSpan={6} className="py-8 text-center muted">Belum ada finalis pada kategori ini.</td></tr>}</tbody></table></div></div>)}</div>};
- return <div className="min-h-screen lg:flex"><aside className="bg-[#151d2e] p-4 text-white lg:fixed lg:inset-y-0 lg:w-64"><div className="flex items-center gap-3 px-2 py-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-red-800"><Trophy/></div><div><b className="text-sm">DUTA TEKNOKRAT</b><p className="text-xs text-slate-400">Sistem Penilaian 2026</p></div></div><div className="mt-7 rounded-xl bg-white/10 p-3"><p className="text-sm font-bold">{profile.full_name}</p><p className="mt-1 text-xs text-slate-300">{profile.role==='admin'?'Administrator':profile.title||'Dewan Juri'}</p></div><nav className="mt-5 space-y-1">{nav.map(item=><button key={item.id} className={`navbtn ${tab===item.id?'active':''}`} onClick={()=>setTab(item.id)}><item.icon className="mr-2 inline" size={16}/>{item.label}</button>)}</nav><button onClick={signOut} className="mt-8 w-full rounded-lg border border-white/20 px-3 py-2 text-left text-sm text-slate-200"><LogOut className="mr-2 inline" size={16}/>Keluar</button></aside>
- <main className="min-w-0 flex-1 p-4 lg:ml-64 lg:p-8"><header className="mb-7 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-widest text-red-800">Portal {isAdmin?'Administrator':'Dewan Juri'}</p><h1 className="mt-1 text-2xl font-black">{nav.find(t=>t.id===tab)?.label||'Dashboard'}</h1></div><div className="flex items-center gap-2">{isAdmin&&<button className={`btn ${locked?'btn-primary':'btn-dark'}`} onClick={setLock}><Lock className="mr-2 inline" size={15}/>{locked?'Buka Penilaian':'Kunci Penilaian'}</button>}<button className="btn btn-soft" onClick={load}><RefreshCw size={15} className="mr-1 inline"/>Refresh</button><span className="rounded-full bg-green-50 px-3 py-2 text-xs font-bold text-green-700">● Terhubung</span></div></header>
- {tab==='dashboard'&&<><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="stat"><Users className="text-red-800"/><p className="muted mt-3 text-xs">Total Finalis</p><b className="text-3xl">{finalists.length}</b></div><div className="stat"><ShieldCheck className="text-blue-700"/><p className="muted mt-3 text-xs">Dewan Juri</p><b className="text-3xl">{judges.length}/5</b></div><div className="stat"><Mic className="text-amber-700"/><p className="muted mt-3 text-xs">Nilai Speech masuk</p><b className="text-3xl">{speech.length}</b></div><div className="stat"><MessageSquare className="text-teal-700"/><p className="muted mt-3 text-xs">Nilai QnA masuk</p><b className="text-3xl">{qna.length}</b></div></div><div className="panel mt-5 p-5"><h2 className="font-bold">Alur penilaian sesuai sistem sumber</h2><div className="mt-4 grid gap-3 md:grid-cols-4">{['Kelola maksimal 5 juri dan data finalis','Penilaian Speech untuk seluruh finalis','Top 6 Putra dan Top 6 Putri lolos QnA','Urutan Winner hingga 5th Runner Up'].map((s,i)=><div className="rounded-xl bg-slate-50 p-4" key={s}><b className="text-xs text-red-800">TAHAP 0{i+1}</b><p className="mt-2 text-sm font-semibold">{s}</p></div>)}</div><p className="muted mt-4 text-xs">Rata-rata Speech = total nilai Speech seluruh juri dibagi jumlah juri. Pemenang tiap kategori diurutkan berdasarkan total nilai QnA seluruh juri.</p></div></>}
- {tab==='juri'&&<><div className="panel p-5"><h2 className="font-bold">{editJudge?'Edit data juri':'Tambah akun juri'}</h2><p className="muted mt-2 text-sm">Buat username dan password juri langsung dari website. Sistem otomatis membuat akun dan profil; UUID tidak perlu disalin manual.</p><form onSubmit={addOrUpdateJudge} className="mt-4 grid gap-3 md:grid-cols-4"><input className="field" placeholder="Nama lengkap juri" value={judgeName} onChange={e=>setJudgeName(e.target.value)} required/>{!editJudge&&<><input className="field" placeholder="Username juri" value={judgeUsername} onChange={e=>setJudgeUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,''))} minLength={3} maxLength={30} required/><input className="field" type="password" minLength={8} placeholder="Password awal (min. 8 karakter)" value={judgePassword} onChange={e=>setJudgePassword(e.target.value)} required/></>}<select className="field" value={judgeTitle} onChange={e=>setJudgeTitle(e.target.value)}>{JUDGE_ROLES.map(r=><option key={r}>{r}</option>)}</select><button className="btn btn-primary" disabled={busy||(!editJudge&&judges.length>=5)}>{busy?'Memproses...':editJudge?'Simpan perubahan':'Tambah juri'}</button>{editJudge&&<button type="button" className="btn btn-soft" onClick={()=>{setEditJudge(null);setJudgeName('');setJudgeUsername('');setJudgePassword('');setJudgeTitle(JUDGE_ROLES[0])}}>Batal edit</button>}</form>{!editJudge&&<p className="muted mt-3 text-xs">Password awal minimal 8 karakter. Berikan username dan password kepada juri melalui jalur pribadi yang aman.</p>}{judges.length>=5&&!editJudge&&<p className="mt-3 text-xs font-semibold text-amber-700">Maksimal 5 juri telah tercapai.</p>}</div><div className="panel mt-5 overflow-hidden"><div className="p-5 font-bold">Daftar Juri ({judges.length}/5)</div><div className="table-wrap"><table><thead><tr><th>Jabatan</th><th>Nama Juri</th><th>Username</th><th>Aksi</th></tr></thead><tbody>{judges.map(j=><tr key={j.id}><td className="font-semibold text-red-800">{j.title}</td><td>{j.full_name}</td><td className="font-mono text-xs">{j.username || "-"}</td><td className="space-x-1"><button className="btn btn-soft" onClick={()=>startEditJudge(j)}><Pencil size={14}/></button><button className="btn btn-danger" onClick={()=>removeJudge(j.id)}><Trash2 size={14}/></button></td></tr>)}{!judges.length&&<tr><td colSpan={4} className="py-8 text-center muted">Belum ada akun juri.</td></tr>}</tbody></table></div></div></>}
- {tab==='finalis'&&<><div className="panel p-5"><h2 className="font-bold">{editFinalist?'Edit Finalis':'Tambah Finalis Baru'}</h2><form onSubmit={saveFinalist} className="mt-4 grid gap-3 md:grid-cols-4"><input className="field" placeholder="Nama lengkap finalis" value={name} onChange={e=>setName(e.target.value)} required/><select className="field" value={prodi} onChange={e=>setProdi(e.target.value)}>{STUDY_PROGRAMS.map(p=><option key={p}>{p}</option>)}</select><select className="field" value={gender} onChange={e=>setGender(e.target.value as Gender)}><option value="putra">Putra</option><option value="putri">Putri</option></select><div className="flex gap-2"><button className="btn btn-primary" disabled={busy}><Plus size={15} className="mr-1 inline"/>{editFinalist?'Simpan':'Tambah'}</button>{editFinalist&&<button type="button" className="btn btn-soft" onClick={()=>{setEditFinalist(null);setName('')}}>Batal</button>}</div></form><div className="mt-5 border-t pt-4"><label className="text-sm font-semibold">Import massal CSV / salinan Excel</label><p className="muted mt-1 text-xs">Format per baris: gender, nama lengkap, program studi. Contoh: putra, Budi Santoso, S1 Informatika</p><textarea className="field mt-2" rows={4} value={importText} onChange={e=>setImportText(e.target.value)} placeholder={'putra, Budi Santoso, S1 Informatika\nputri, Ani Wijaya, S1 Manajemen'}/><button className="btn btn-dark mt-2" onClick={importFinalists}><Upload className="mr-2 inline" size={15}/>Proses Import</button></div></div><div className="grid gap-5 xl:grid-cols-2">{(['putra','putri'] as Gender[]).map(g=><div className="panel overflow-hidden" key={g}><div className="border-b p-5 font-bold">Finalis {genderLabel(g)} ({finalists.filter(f=>f.gender===g).length})</div><div className="table-wrap"><table><thead><tr><th>No</th><th>Nama</th><th>Program Studi</th><th>Aksi</th></tr></thead><tbody>{finalists.filter(f=>f.gender===g).map((f,i)=><tr key={f.id}><td>{String(i+1).padStart(2,'0')}</td><td className="font-semibold">{f.name}</td><td>{f.study_program}</td><td className="space-x-1"><button className="btn btn-soft" onClick={()=>editFinalistRow(f)}><Pencil size={14}/></button><button className="btn btn-danger" onClick={()=>deleteFinalist(f.id)}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div></div>)}</div></>}
- {tab==='speech'&&scoreTable('speech')}{tab==='qna'&&scoreTable('qna')}
- {tab==='rekap11'&&<div className="grid gap-5 xl:grid-cols-2">{(['putra','putri'] as Gender[]).map(g=><div className="panel overflow-hidden" key={g}><div className="bg-slate-900 p-4 font-bold text-white">Rekap Speech · {genderLabel(g)} · Top 6 lolos QnA</div><div className="table-wrap"><table><thead><tr><th>Rank</th><th>Nama Finalis</th><th>Total Nilai</th><th>Rata-rata</th><th>Status</th></tr></thead><tbody>{rankedSpeech(g).map((f,i)=><tr key={f.id}><td>{i+1}</td><td><b>{f.name}</b><div className="muted text-xs">{f.study_program}</div></td><td>{speech.filter(s=>s.finalist_id===f.id).reduce((n,s)=>n+Number(s.score),0).toFixed(2)}</td><td className="font-bold">{speechAverage(f).toFixed(2)}</td><td>{i<6?<span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">LOLOS QnA</span>:'-'}</td></tr>)}</tbody></table></div></div>)}</div>}
- {tab==='rekap6'&&<div className="grid gap-5 xl:grid-cols-2">{(['putra','putri'] as Gender[]).map(g=><div className="panel overflow-hidden" key={g}><div className="bg-slate-900 p-4 font-bold text-white">Rekap QnA & Pemenang · {genderLabel(g)}</div><div className="table-wrap"><table><thead><tr><th>Gelar</th><th>Nama Finalis</th><th>Total QnA</th></tr></thead><tbody>{rankedQna(g).map((f,i)=><tr key={f.id}><td className="font-bold">{WINNER_TITLES[i]}</td><td><b>{f.name}</b><div className="muted text-xs">{f.study_program}</div></td><td className="font-black text-red-800">{qnaTotal(f).toFixed(2)}</td></tr>)}</tbody></table></div></div>)}</div>}
- {tab==='berita'&&<div className="space-y-4"><div className="panel flex flex-wrap items-center justify-between gap-3 p-5 print:hidden"><div><h2 className="font-bold">Preview Berita Acara</h2><p className="muted mt-1 text-xs">Pilih dokumen, lalu cetak atau simpan sebagai PDF.</p></div><div className="flex flex-wrap gap-2"><button className={`btn ${report==='11'?'btn-primary':'btn-soft'}`} onClick={()=>setReport('11')}>BA 11 Besar</button><button className={`btn ${report==='6'?'btn-primary':'btn-soft'}`} onClick={()=>setReport('6')}>BA 6 Besar</button><button className={`btn ${report==='pemenang'?'btn-primary':'btn-soft'}`} onClick={()=>setReport('pemenang')}>BA Pemenang</button><button className="btn btn-dark" onClick={()=>window.print()}>Cetak / PDF</button></div></div><div className="panel print-document p-8"><div className="border-b-4 border-double border-slate-900 pb-4 text-center"><h2 className="text-xl font-black">UNIVERSITAS TEKNOKRAT INDONESIA</h2><h3 className="font-bold text-red-800">PANITIA PEMILIHAN DUTA TEKNOKRAT 2026</h3><p className="mt-1 text-xs">Jl. ZA. Pagar Alam No.9-11, Labuhan Ratu, Kota Bandar Lampung</p></div><h3 className="my-6 text-center text-base font-black uppercase">{report==='11'?'BERITA ACARA REKAPITULASI 11 BESAR (SPEECH)':report==='6'?'BERITA ACARA PESERTA LOLOS 6 BESAR (QnA)':'BERITA ACARA PENGUMUMAN PEMENANG DUTA TEKNOKRAT 2026'}</h3><p className="mb-5 text-sm">{report==='11'?'Berikut hasil rekapitulasi penilaian Speech finalis Putra dan Putri. Enam finalis dengan rata-rata tertinggi pada masing-masing kategori dinyatakan lolos ke tahap QnA.':report==='6'?'Berdasarkan akumulasi nilai Speech, berikut finalis Putra dan Putri yang lolos ke babak Question & Answer (QnA).':'Berdasarkan hasil penilaian babak final QnA oleh Dewan Juri, ditetapkan urutan pemenang Duta Teknokrat 2026 sebagai berikut.'}</p><div className="grid gap-6 md:grid-cols-2">{(['putra','putri'] as Gender[]).map(g=><div key={g}><h4 className="mb-2 text-center font-bold">{report==='pemenang'?'URUTAN PEMENANG':'KATEGORI'} {genderLabel(g).toUpperCase()}</h4><table className="w-full"><thead><tr><th>{report==='pemenang'?'Gelar':'Rank'}</th><th>Nama Finalis</th><th>{report==='11'?'Rata-rata':report==='6'?'Prodi':'Total QnA'}</th></tr></thead><tbody>{reportRows(g).map((f,i)=><tr key={f.id}><td>{report==='pemenang'?WINNER_TITLES[i]:i+1}</td><td>{f.name}</td><td>{report==='11'?speechAverage(f).toFixed(2):report==='6'?f.study_program:qnaTotal(f).toFixed(2)}</td></tr>)}</tbody></table></div>)}</div><div className="mt-12"><p className="text-right text-xs">Bandar Lampung, {new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}</p><p className="mb-5 mt-4 text-center text-xs font-bold">DEWAN JURI DUTA TEKNOKRAT 2026</p><div className="grid grid-cols-2 gap-8 text-center text-xs md:grid-cols-3">{JUDGE_ROLES.map(r=>{const j=judges.find(x=>x.title===r);return <div key={r} className="space-y-12"><p className="font-bold">{r}</p><div className="mx-auto w-3/4 border-b border-slate-500"/><p className="font-semibold">{j?.full_name||'( .................................... )'}</p></div>})}</div></div></div></div>}
- <footer className="muted mt-8 text-center text-xs">© 2026 Universitas Teknokrat Indonesia · Data tersimpan di Supabase · {locked?'Penilaian dikunci':'Penilaian terbuka'}</footer></main>{toast&&<div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl">{toast}</div>}</div>;
+
+  if (!profile) {
+    return (
+      <main className="min-h-screen grid place-items-center p-5">
+        <div className="panel max-w-lg p-7">
+          <ShieldCheck className="mb-3 text-amber-600" size={30} />
+
+          <h2 className="text-lg font-bold">Profil akun belum tersedia</h2>
+
+          <p className="muted mt-2 text-sm">
+            Akun berhasil login, tetapi belum memiliki profil pada tabel{' '}
+            <code>profiles</code>. Admin perlu menambahkan profil akun ini di
+            menu Kelola Data Juri atau melalui SQL Editor.
+          </p>
+
+          <p className="mt-3 text-xs text-red-700">{error}</p>
+
+          <button className="btn btn-soft mt-4" onClick={signOut}>
+            Keluar
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const scoreTable = (kind: 'speech' | 'qna') => {
+    const candidates =
+      kind === 'speech'
+        ? rankedSpeech('putra').concat(rankedSpeech('putri'))
+        : topSix('putra').concat(topSix('putri'));
+
+    return (
+      <div className="panel overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+          <div>
+            <h2 className="font-bold">
+              {kind === 'speech'
+                ? 'Input Nilai Speech (11 Besar)'
+                : 'Input Nilai QnA (6 Besar)'}
+            </h2>
+
+            <p className="muted mt-1 text-xs">
+              Satu nilai per finalis, skala 0–100. Nilai tersimpan ke database
+              saat tombol Simpan ditekan.
+            </p>
+          </div>
+
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">
+            {kind === 'speech' ? finalists.length : 12} slot maksimal
+          </span>
+        </div>
+
+        {(['putra', 'putri'] as Gender[]).map((g) => (
+          <div key={g}>
+            <div className="bg-slate-50 px-5 py-3 text-sm font-bold">
+              Finalis {genderLabel(g)}
+            </div>
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Nama Finalis</th>
+                    <th>Program Studi</th>
+                    <th>Nilai 0–100</th>
+                    <th>Rata-rata / Total</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {(kind === 'speech' ? rankedSpeech(g) : topSix(g)).map(
+                    (f, i) => {
+                      const key = `${kind}:${f.id}`;
+                      const v = scoreInputs[key] ?? myScore(kind, f.id);
+                      const total =
+                        kind === 'speech' ? speechAverage(f) : qnaTotal(f);
+
+                      return (
+                        <tr key={f.id}>
+                          <td>{String(i + 1).padStart(2, '0')}</td>
+                          <td className="font-semibold">{f.name}</td>
+                          <td>{f.study_program}</td>
+                          <td>
+                            <input
+                              className="score"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={v}
+                              disabled={locked}
+                              placeholder="0–100"
+                              onChange={(e) =>
+                                setScoreInputs((s) => ({
+                                  ...s,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                            />
+                          </td>
+                          <td className="font-bold">{total.toFixed(2)}</td>
+                          <td>
+                            <button
+                              className="btn btn-primary"
+                              disabled={locked}
+                              onClick={() => saveScore(f, kind)}
+                            >
+                              Simpan
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }
+                  )}
+
+                  {!(kind === 'speech'
+                    ? rankedSpeech(g)
+                    : topSix(g)
+                  ).length && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center muted">
+                        Belum ada finalis pada kategori ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen lg:flex">
+      <aside className="bg-[#151d2e] p-4 text-white lg:fixed lg:inset-y-0 lg:w-64">
+        <div className="flex items-center gap-3 px-2 py-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-red-800">
+            <Trophy />
+          </div>
+
+          <div>
+            <b className="text-sm">DUTA TEKNOKRAT</b>
+            <p className="text-xs text-slate-400">Sistem Penilaian 2026</p>
+          </div>
+        </div>
+
+        <div className="mt-7 rounded-xl bg-white/10 p-3">
+          <p className="text-sm font-bold">{profile.full_name}</p>
+          <p className="mt-1 text-xs text-slate-300">
+            {profile.role === 'admin'
+              ? 'Administrator'
+              : profile.title || 'Dewan Juri'}
+          </p>
+        </div>
+
+        <nav className="mt-5 space-y-1">
+          {nav.map((item) => (
+            <button
+              key={item.id}
+              className={`navbtn ${tab === item.id ? 'active' : ''}`}
+              onClick={() => setTab(item.id)}
+            >
+              <item.icon className="mr-2 inline" size={16} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <button
+          onClick={signOut}
+          className="mt-8 w-full rounded-lg border border-white/20 px-3 py-2 text-left text-sm text-slate-200"
+        >
+          <LogOut className="mr-2 inline" size={16} />
+          Keluar
+        </button>
+      </aside>
+
+      <main className="min-w-0 flex-1 p-4 lg:ml-64 lg:p-8">
+        <header className="mb-7 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-red-800">
+              Portal {isAdmin ? 'Administrator' : 'Dewan Juri'}
+            </p>
+
+            <h1 className="mt-1 text-2xl font-black">
+              {nav.find((t) => t.id === tab)?.label || 'Dashboard'}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                className={`btn ${locked ? 'btn-primary' : 'btn-dark'}`}
+                onClick={setLock}
+              >
+                <Lock className="mr-2 inline" size={15} />
+                {locked ? 'Buka Penilaian' : 'Kunci Penilaian'}
+              </button>
+            )}
+
+            <button className="btn btn-soft" onClick={load}>
+              <RefreshCw size={15} className="mr-1 inline" />
+              Refresh
+            </button>
+
+            <span className="rounded-full bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
+              ● Terhubung
+            </span>
+          </div>
+        </header>
+
+        {tab === 'dashboard' && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="stat">
+                <Users className="text-red-800" />
+                <p className="muted mt-3 text-xs">Total Finalis</p>
+                <b className="text-3xl">{finalists.length}</b>
+              </div>
+
+              <div className="stat">
+                <ShieldCheck className="text-blue-700" />
+                <p className="muted mt-3 text-xs">Dewan Juri</p>
+                <b className="text-3xl">{judges.length}/5</b>
+              </div>
+
+              <div className="stat">
+                <Mic className="text-amber-700" />
+                <p className="muted mt-3 text-xs">Nilai Speech masuk</p>
+                <b className="text-3xl">{speech.length}</b>
+              </div>
+
+              <div className="stat">
+                <MessageSquare className="text-teal-700" />
+                <p className="muted mt-3 text-xs">Nilai QnA masuk</p>
+                <b className="text-3xl">{qna.length}</b>
+              </div>
+            </div>
+
+            <div className="panel mt-5 p-5">
+              <h2 className="font-bold">Alur penilaian sesuai sistem sumber</h2>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                {[
+                  'Kelola maksimal 5 juri dan data finalis',
+                  'Penilaian Speech untuk seluruh finalis',
+                  'Top 6 Putra dan Top 6 Putri lolos QnA',
+                  'Urutan Winner hingga 5th Runner Up',
+                ].map((s, i) => (
+                  <div className="rounded-xl bg-slate-50 p-4" key={s}>
+                    <b className="text-xs text-red-800">TAHAP 0{i + 1}</b>
+                    <p className="mt-2 text-sm font-semibold">{s}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="muted mt-4 text-xs">
+                Rata-rata Speech = total nilai Speech seluruh juri dibagi
+                jumlah juri. Pemenang tiap kategori diurutkan berdasarkan
+                total nilai QnA seluruh juri.
+              </p>
+            </div>
+          </>
+        )}
+
+        {tab === 'juri' && (
+          <>
+            <div className="panel p-5">
+              <h2 className="font-bold">
+                {editJudge ? 'Edit data juri' : 'Tambah akun juri'}
+              </h2>
+
+              <p className="muted mt-2 text-sm">
+                Buat username dan password juri langsung dari website. Sistem
+                otomatis membuat akun dan profil; UUID tidak perlu disalin
+                manual.
+              </p>
+
+              <form
+                onSubmit={addOrUpdateJudge}
+                className="mt-4 grid gap-3 md:grid-cols-4"
+              >
+                <input
+                  className="field"
+                  placeholder="Nama lengkap juri"
+                  value={judgeName}
+                  onChange={(e) => setJudgeName(e.target.value)}
+                  required
+                />
+
+                {!editJudge && (
+                  <>
+                    <input
+                      className="field"
+                      placeholder="Username juri"
+                      value={judgeUsername}
+                      onChange={(e) =>
+                        setJudgeUsername(
+                          e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '')
+                        )
+                      }
+                      minLength={3}
+                      maxLength={30}
+                      required
+                    />
+
+                    <input
+                      className="field"
+                      type="password"
+                      minLength={8}
+                      placeholder="Password awal (min. 8 karakter)"
+                      value={judgePassword}
+                      onChange={(e) => setJudgePassword(e.target.value)}
+                      required
+                    />
+                  </>
+                )}
+
+                <select
+                  className="field"
+                  value={judgeTitle}
+                  onChange={(e) => setJudgeTitle(e.target.value)}
+                >
+                  {JUDGE_ROLES.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+
+                <button
+                  className="btn btn-primary"
+                  disabled={busy || (!editJudge && judges.length >= 5)}
+                >
+                  {busy
+                    ? 'Memproses...'
+                    : editJudge
+                      ? 'Simpan perubahan'
+                      : 'Tambah juri'}
+                </button>
+
+                {editJudge && (
+                  <button
+                    type="button"
+                    className="btn btn-soft"
+                    onClick={() => {
+                      setEditJudge(null);
+                      setJudgeName('');
+                      setJudgeUsername('');
+                      setJudgePassword('');
+                      setJudgeTitle(JUDGE_ROLES[0]);
+                    }}
+                  >
+                    Batal edit
+                  </button>
+                )}
+              </form>
+
+              {!editJudge && (
+                <p className="muted mt-3 text-xs">
+                  Password awal minimal 8 karakter. Berikan username dan
+                  password kepada juri melalui jalur pribadi yang aman.
+                </p>
+              )}
+
+              {judges.length >= 5 && !editJudge && (
+                <p className="mt-3 text-xs font-semibold text-amber-700">
+                  Maksimal 5 juri telah tercapai.
+                </p>
+              )}
+            </div>
+
+            <div className="panel mt-5 overflow-hidden">
+              <div className="p-5 font-bold">
+                Daftar Juri ({judges.length}/5)
+              </div>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Jabatan</th>
+                      <th>Nama Juri</th>
+                      <th>Username</th>
+                      <th>Aksi</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {judges.map((j) => (
+                      <tr key={j.id}>
+                        <td className="font-semibold text-red-800">
+                          {j.title}
+                        </td>
+                        <td>{j.full_name}</td>
+                        <td className="font-mono text-xs">
+                          {j.username || '-'}
+                        </td>
+                        <td className="space-x-1">
+                          <button
+                            className="btn btn-soft"
+                            onClick={() => startEditJudge(j)}
+                          >
+                            <Pencil size={14} />
+                          </button>
+
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => removeJudge(j.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {!judges.length && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center muted">
+                          Belum ada akun juri.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === 'finalis' && (
+          <>
+            <div className="panel p-5">
+              <h2 className="font-bold">
+                {editFinalist ? 'Edit Finalis' : 'Tambah Finalis Baru'}
+              </h2>
+
+              <form
+                onSubmit={saveFinalist}
+                className="mt-4 grid gap-3 md:grid-cols-4"
+              >
+                <input
+                  className="field"
+                  placeholder="Nama lengkap finalis"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+
+                <select
+                  className="field"
+                  value={prodi}
+                  onChange={(e) => setProdi(e.target.value)}
+                >
+                  {STUDY_PROGRAMS.map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="field"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as Gender)}
+                >
+                  <option value="putra">Putra</option>
+                  <option value="putri">Putri</option>
+                </select>
+
+                <div className="flex gap-2">
+                  <button className="btn btn-primary" disabled={busy}>
+                    <Plus size={15} className="mr-1 inline" />
+                    {editFinalist ? 'Simpan' : 'Tambah'}
+                  </button>
+
+                  {editFinalist && (
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      onClick={() => {
+                        setEditFinalist(null);
+                        setName('');
+                      }}
+                    >
+                      Batal
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              <div className="mt-5 border-t pt-4">
+                <label className="text-sm font-semibold">
+                  Import massal CSV / salinan Excel
+                </label>
+
+                <p className="muted mt-1 text-xs">
+                  Format per baris: gender, nama lengkap, program studi.
+                  Contoh: putra, Budi Santoso, S1 Informatika
+                </p>
+
+                <textarea
+                  className="field mt-2"
+                  rows={4}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder={
+                    'putra, Budi Santoso, S1 Informatika\nputri, Ani Wijaya, S1 Manajemen'
+                  }
+                />
+
+                <button
+                  className="btn btn-dark mt-2"
+                  onClick={importFinalists}
+                >
+                  <Upload className="mr-2 inline" size={15} />
+                  Proses Import
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-2">
+              {(['putra', 'putri'] as Gender[]).map((g) => (
+                <div className="panel overflow-hidden" key={g}>
+                  <div className="border-b p-5 font-bold">
+                    Finalis {genderLabel(g)} (
+                    {finalists.filter((f) => f.gender === g).length})
+                  </div>
+
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>No</th>
+                          <th>Nama</th>
+                          <th>Program Studi</th>
+                          <th>Aksi</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {finalists
+                          .filter((f) => f.gender === g)
+                          .map((f, i) => (
+                            <tr key={f.id}>
+                              <td>{String(i + 1).padStart(2, '0')}</td>
+                              <td className="font-semibold">{f.name}</td>
+                              <td>{f.study_program}</td>
+                              <td className="space-x-1">
+                                <button
+                                  className="btn btn-soft"
+                                  onClick={() => editFinalistRow(f)}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+
+                                <button
+                                  className="btn btn-danger"
+                                  onClick={() => deleteFinalist(f.id)}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === 'speech' && scoreTable('speech')}
+        {tab === 'qna' && scoreTable('qna')}
+
+        {tab === 'rekap11' && (
+          <div className="grid gap-5 xl:grid-cols-2">
+            {(['putra', 'putri'] as Gender[]).map((g) => (
+              <div className="panel overflow-hidden" key={g}>
+                <div className="bg-slate-900 p-4 font-bold text-white">
+                  Rekap Speech · {genderLabel(g)} · Top 6 lolos QnA
+                </div>
+
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Rank</th>
+                        <th>Nama Finalis</th>
+                        <th>Total Nilai</th>
+                        <th>Rata-rata</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {rankedSpeech(g).map((f, i) => (
+                        <tr key={f.id}>
+                          <td>{i + 1}</td>
+                          <td>
+                            <b>{f.name}</b>
+                            <div className="muted text-xs">
+                              {f.study_program}
+                            </div>
+                          </td>
+                          <td>
+                            {speech
+                              .filter((s) => s.finalist_id === f.id)
+                              .reduce((n, s) => n + Number(s.score), 0)
+                              .toFixed(2)}
+                          </td>
+                          <td className="font-bold">
+                            {speechAverage(f).toFixed(2)}
+                          </td>
+                          <td>
+                            {i < 6 ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                                LOLOS QnA
+                              </span>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'rekap6' && (
+          <div className="grid gap-5 xl:grid-cols-2">
+            {(['putra', 'putri'] as Gender[]).map((g) => (
+              <div className="panel overflow-hidden" key={g}>
+                <div className="bg-slate-900 p-4 font-bold text-white">
+                  Rekap QnA & Pemenang · {genderLabel(g)}
+                </div>
+
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Gelar</th>
+                        <th>Nama Finalis</th>
+                        <th>Total QnA</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {rankedQna(g).map((f, i) => (
+                        <tr key={f.id}>
+                          <td className="font-bold">{WINNER_TITLES[i]}</td>
+                          <td>
+                            <b>{f.name}</b>
+                            <div className="muted text-xs">
+                              {f.study_program}
+                            </div>
+                          </td>
+                          <td className="font-black text-red-800">
+                            {qnaTotal(f).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'berita' && (
+          <div className="space-y-4">
+            <div className="panel flex flex-wrap items-center justify-between gap-3 p-5 print:hidden">
+              <div>
+                <h2 className="font-bold">Preview Berita Acara</h2>
+                <p className="muted mt-1 text-xs">
+                  Pilih dokumen, lalu cetak atau simpan sebagai PDF.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={`btn ${report === '11' ? 'btn-primary' : 'btn-soft'}`}
+                  onClick={() => setReport('11')}
+                >
+                  BA 11 Besar
+                </button>
+
+                <button
+                  className={`btn ${report === '6' ? 'btn-primary' : 'btn-soft'}`}
+                  onClick={() => setReport('6')}
+                >
+                  BA 6 Besar
+                </button>
+
+                <button
+                  className={`btn ${report === 'pemenang' ? 'btn-primary' : 'btn-soft'}`}
+                  onClick={() => setReport('pemenang')}
+                >
+                  BA Pemenang
+                </button>
+
+                <button
+                  className="btn btn-dark"
+                  onClick={() => window.print()}
+                >
+                  Cetak / PDF
+                </button>
+              </div>
+            </div>
+
+            <div className="panel print-document p-8">
+              <div className="border-b-4 border-double border-slate-900 pb-4 text-center">
+                <h2 className="text-xl font-black">
+                  UNIVERSITAS TEKNOKRAT INDONESIA
+                </h2>
+                <h3 className="font-bold text-red-800">
+                  PANITIA PEMILIHAN DUTA TEKNOKRAT 2026
+                </h3>
+                <p className="mt-1 text-xs">
+                  Jl. ZA. Pagar Alam No.9-11, Labuhan Ratu, Kota Bandar Lampung
+                </p>
+              </div>
+
+              <h3 className="my-6 text-center text-base font-black uppercase">
+                {report === '11'
+                  ? 'BERITA ACARA REKAPITULASI 11 BESAR (SPEECH)'
+                  : report === '6'
+                    ? 'BERITA ACARA PESERTA LOLOS 6 BESAR (QnA)'
+                    : 'BERITA ACARA PENGUMUMAN PEMENANG DUTA TEKNOKRAT 2026'}
+              </h3>
+
+              <p className="mb-5 text-sm">
+                {report === '11'
+                  ? 'Berikut hasil rekapitulasi penilaian Speech finalis Putra dan Putri. Enam finalis dengan rata-rata tertinggi pada masing-masing kategori dinyatakan lolos ke tahap QnA.'
+                  : report === '6'
+                    ? 'Berdasarkan akumulasi nilai Speech, berikut finalis Putra dan Putri yang lolos ke babak Question & Answer (QnA).'
+                    : 'Berdasarkan hasil penilaian babak final QnA oleh Dewan Juri, ditetapkan urutan pemenang Duta Teknokrat 2026 sebagai berikut.'}
+              </p>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                {(['putra', 'putri'] as Gender[]).map((g) => (
+                  <div key={g}>
+                    <h4 className="mb-2 text-center font-bold">
+                      {report === 'pemenang' ? 'URUTAN PEMENANG' : 'KATEGORI'}{' '}
+                      {genderLabel(g).toUpperCase()}
+                    </h4>
+
+                    <table className="w-full">
+                      <thead>
+                        <tr>
+                          <th>{report === 'pemenang' ? 'Gelar' : 'Rank'}</th>
+                          <th>Nama Finalis</th>
+                          <th>
+                            {report === '11'
+                              ? 'Rata-rata'
+                              : report === '6'
+                                ? 'Prodi'
+                                : 'Total QnA'}
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {reportRows(g).map((f, i) => (
+                          <tr key={f.id}>
+                            <td>
+                              {report === 'pemenang'
+                                ? WINNER_TITLES[i]
+                                : i + 1}
+                            </td>
+                            <td>{f.name}</td>
+                            <td>
+                              {report === '11'
+                                ? speechAverage(f).toFixed(2)
+                                : report === '6'
+                                  ? f.study_program
+                                  : qnaTotal(f).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-12">
+                <p className="text-right text-xs">
+                  Bandar Lampung,{' '}
+                  {new Date().toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </p>
+
+                <p className="mb-5 mt-4 text-center text-xs font-bold">
+                  DEWAN JURI DUTA TEKNOKRAT 2026
+                </p>
+
+                <div className="grid grid-cols-2 gap-8 text-center text-xs md:grid-cols-3">
+                  {JUDGE_ROLES.map((r) => {
+                    const j = judges.find((x) => x.title === r);
+
+                    return (
+                      <div key={r} className="space-y-12">
+                        <p className="font-bold">{r}</p>
+                        <div className="mx-auto w-3/4 border-b border-slate-500" />
+                        <p className="font-semibold">
+                          {j?.full_name || '( .................................... )'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <footer className="muted mt-8 text-center text-xs">
+          © 2026 Universitas Teknokrat Indonesia · Data tersimpan di Supabase ·{' '}
+          {locked ? 'Penilaian dikunci' : 'Penilaian terbuka'}
+        </footer>
+      </main>
+
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
 }
